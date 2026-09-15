@@ -1,0 +1,9 @@
+{
+  "name": "aegis-urban-disaster-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Demo-first urban disaster response dashboard and REST API",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08111f" />
+    <title>Aegis | Urban Disaster Response</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">✦</div>
+          <div><strong>AEGIS</strong><span>Urban resilience command</span></div>
+        </div>
+        <div class="nav-label">Command center</div>
+        <nav>
+          <button class="nav-item active"><span>◈</span> Situation room</button>
+          <button class="nav-item"><span>⌁</span> Live incidents <b>12</b></button>
+          <button class="nav-item"><span>⌂</span> Shelters & capacity</button>
+          <button class="nav-item"><span>◌</span> Resources</button>
+          <button class="nav-item"><span>▣</span> Public alerts</button>
+        </nav>
+        <div class="sidebar-spacer"></div>
+        <div class="system-card">
+          <div class="pulse"><i></i> Systems operational</div>
+          <p>All city sensors synced</p>
+          <small>Last sync · 08:42:16 IST</small>
+        </div>
+        <div class="profile">
+          <div class="avatar">RK</div>
+          <div><strong>Riya Kapoor</strong><span>District coordinator</span></div>
+          <span class="dots">•••</span>
+        </div>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <div class="eyebrow"><span class="live-dot"></span> LIVE OPERATIONS · MON 14 OCT 2026</div>
+            <h1>Situation room</h1>
+            <p class="subtitle">Kochi metropolitan region <span>·</span> Monsoon response grid</p>
+          </div>
+          <div class="top-actions">
+            <button class="icon-button" aria-label="Notifications">♢<span class="notification"></span></button>
+            <button class="export-button" id="exportButton">Export briefing <span>↗</span></button>
+          </div>
+        </header>
+
+        <section class="alert-banner">
+          <div class="alert-icon">!</div>
+          <div><strong>Monsoon surge advisory</strong><span>Heavy rainfall expected in Zones 2 and 4 between 14:00–18:00. Pre-position rescue teams.</span></div>
+          <button id="dismissAlert">Dismiss ×</button>
+        </section>
+
+        <section class="stats-grid">
+          <article class="stat-card critical"><div class="stat-top"><span>Active incidents</span><span class="trend down">↑ 4.8%</span></div><strong>12</strong><small>3 require immediate attention</small><div class="sparkline red"></div></article>
+          <article class="stat-card"><div class="stat-top"><span>People at risk</span><span class="trend up">↓ 8.2%</span></div><strong>8,460</strong><small>Across 4 flood-prone zones</small><div class="sparkline blue"></div></article>
+          <article class="stat-card"><div class="stat-top"><span>Shelter capacity</span><span class="trend up">+12.5%</span></div><strong>72%</strong><small>1,280 beds available now</small><div class="progress"><i style="width:72%"></i></div></article>
+          <article class="stat-card"><div class="stat-top"><span>Response readiness</span><span class="trend up">Stable</span></div><strong>94%</strong><small>Teams checked in: 47 / 50</small><div class="progress green"><i style="width:94%"></i></div></article>
+        </section>
+
+        <section class="main-grid">
+          <article class="panel map-panel">
+            <div class="panel-header"><div><h2>Risk intelligence map</h2><p>Rainfall, water level and field reports</p></div><div class="map-controls"><button class="selected">Risk</button><button>Rainfall</button><button>Resources</button></div></div>
+            <div class="map">
+              <div class="map-grid"></div>
+              <div class="river"></div>
+              <div class="zone zone-one"><span>ZONE 01</span><b>LOW</b></div>
+              <div class="zone zone-two"><span>ZONE 02</span><b>HIGH</b></div>
+              <div class="zone zone-three"><span>ZONE 03</span><b>MEDIUM</b></div>
+              <div class="zone zone-four"><span>ZONE 04</span><b>HIGH</b></div>
+              <div class="map-label label-a">KADAVANTHRA</div><div class="map-label label-b">KALOOR</div><div class="map-label label-c">MARINE DRIVE</div>
+              <button class="map-pin pin-red" data-incident="Canal overflow · Palarivattom">!</button>
+              <button class="map-pin pin-orange" data-incident="Road blocked · Kaloor">!</button>
+              <button class="map-pin pin-blue" data-incident="Shelter · St. Mary's School">⌂</button>
+              <div class="map-legend"><span><i class="legend-dot red"></i> Critical</span><span><i class="legend-dot orange"></i> Watch</span><span><i class="legend-dot blue"></i> Shelter</span></div>
+              <div class="map-tooltip" id="mapTooltip"></div>
+            </div>
+          </article>
+
+          <article class="panel incident-panel">
+            <div class="panel-header"><div><h2>Priority incidents</h2><p>Sorted by response urgency</p></div><button class="more">View all ↗</button></div>
+            <div class="incident-list">
+              <button class="incident active-incident"><span class="incident-marker red">!</span><span class="incident-copy"><strong>Canal overflow</strong><small>Palarivattom · 14 min ago</small></span><span class="severity critical-text">Critical</span></button>
+              <button class="incident"><span class="incident-marker orange">!</span><span class="incident-copy"><strong>Road submerged</strong><small>Kaloor junction · 28 min ago</small></span><span class="severity high-text">High</span></button>
+              <button class="incident"><span class="incident-marker orange">!</span><span class="incident-copy"><strong>Power outage</strong><small>Vyttila ward · 42 min ago</small></span><span class="severity high-text">High</span></button>
+              <button class="incident"><span class="incident-marker yellow">!</span><span class="incident-copy"><strong>Medical evacuation</strong><small>Edappally · 1 hr ago</small></span><span class="severity medium-text">Medium</span></button>
+            </div>
+            <div class="incident-footer"><span>12 active incidents</span><button id="dispatchButton">Dispatch team <span>→</span></button></div>
+          </article>
+        </section>
+
+        <section class="bottom-grid">
+          <article class="panel table-panel"><div class="panel-header"><div><h2>Field response teams</h2><p>Live deployment status</p></div><button class="more">Manage teams ↗</button></div><table><thead><tr><th>TEAM</th><th>ASSIGNMENT</th><th>STATUS</th><th>ETA</th></tr></thead><tbody><tr><td><span class="team-icon">↟</span> Alpha 01</td><td>Palarivattom overflow</td><td><span class="status active-status">● En route</span></td><td>06 min</td></tr><tr><td><span class="team-icon teal">◆</span> Medical 03</td><td>Edappally evacuation</td><td><span class="status active-status">● On site</span></td><td>—</td></tr><tr><td><span class="team-icon purple">✚</span> Utility 02</td><td>Vyttila power outage</td><td><span class="status waiting-status">● Standby</span></td><td>18 min</td></tr></tbody></table></article>
+          <article class="panel alert-panel"><div class="panel-header"><div><h2>Public alert reach</h2><p>Last 24 hours</p></div><span class="reach-total">84.2K <small>people</small></span></div><div class="reach-chart"><div class="chart-y"><span>40k</span><span>20k</span><span>0</span></div><div class="bars"><i style="height:42%"></i><i style="height:58%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:52%"></i><i style="height:88%"></i><i style="height:64%"></i><i style="height:94%"></i><i style="height:76%"></i><i style="height:100%"></i><i style="height:84%"></i><i style="height:92%"></i></div></div><div class="chart-labels"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span></div></article>
+        </section>
+      </main>
+    </div>
+      <div class="modal-backdrop" id="modalBackdrop">
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+          <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+          <div class="eyebrow">AEGIS OPERATIONS</div>
+          <h2 id="modalTitle">Details</h2>
+          <p id="modalSubtitle"></p>
+          <div id="modalBody"></div>
+        </section>
+      </div>
+      <div class="toast" id="toast"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
