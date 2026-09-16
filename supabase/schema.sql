@@ -4,6 +4,8 @@ create table if not exists public.incidents (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   location text not null,
+  latitude double precision,
+  longitude double precision,
   description text not null,
   photo_name text,
   severity text not null default 'Medium' check (severity in ('Low', 'Medium', 'High', 'Critical')),
@@ -61,6 +63,9 @@ from (values
   ('Medical evacuation', 'Edappally', 'Residents require medical evacuation.', 'Medium', 'Responding')
 ) as seed(title, location, description, severity, status)
 where not exists (select 1 from public.incidents);
+
+alter table public.incidents add column if not exists latitude double precision;
+alter table public.incidents add column if not exists longitude double precision;
 
 insert into public.public_alerts (title, message)
 select 'Monsoon surge advisory',

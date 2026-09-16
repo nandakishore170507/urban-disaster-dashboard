@@ -15,6 +15,12 @@ const maxPhotoBytes = 8 * 1024 * 1024;
 const maxBodyBytes = Math.ceil(maxPhotoBytes * 1.4);
 const allowedSeverities = new Set(["Low", "Medium", "High", "Critical"]);
 const allowedStatuses = new Set(["Reported", "Assigned", "Responding", "Resolved"]);
+const knownCoordinates = {
+  Palarivattom: [9.9972, 76.3071],
+  "Kaloor junction": [10.0014, 76.2999],
+  "Vyttila ward": [9.9678, 76.3189],
+  Edappally: [10.0261, 76.3086]
+};
 const seedState = {
   incidents: [
     { id: "inc-001", title: "Canal overflow", location: "Palarivattom", age: "14 min ago", severity: "Critical", status: "Reported" },
@@ -69,17 +75,22 @@ const readBody = (req) => new Promise((resolve, reject) => {
   req.on("error", reject);
 });
 
-const formatIncident = (incident, photoUrl = null) => ({
+const formatIncident = (incident, photoUrl = null) => {
+  const fallback = knownCoordinates[incident.location] || null;
+  return {
   id: incident.id,
   title: incident.title,
   location: incident.location,
+  latitude: incident.latitude ?? fallback?.[0] ?? null,
+  longitude: incident.longitude ?? fallback?.[1] ?? null,
   description: incident.description,
   photoName: incident.photo_name || null,
   photoUrl,
   age: incident.created_at ? relativeAge(incident.created_at) : incident.age,
   severity: incident.severity,
   status: incident.status
-});
+  };
+};
 
 const getPhotoUrl = async (photoPath) => {
   if (!supabase || !photoPath) return null;
@@ -160,6 +171,8 @@ const createIncident = async (body) => {
       const { data, error } = await supabase.from("incidents").insert({
         title: body.title,
         location: body.location,
+        latitude: body.latitude ?? null,
+        longitude: body.longitude ?? null,
         description: body.description,
         photo_name: photoPath,
         severity: body.severity
@@ -171,7 +184,7 @@ const createIncident = async (body) => {
       throw error;
     }
   }
-  const incident = { id: `inc-${Date.now()}`, title: body.title, location: body.location, description: body.description, photoName: body.photoName || null, age: "just now", severity: body.severity, status: "Reported" };
+  const incident = { id: `inc-${Date.now()}`, title: body.title, location: body.location, latitude: body.latitude ?? null, longitude: body.longitude ?? null, description: body.description, photoName: body.photoName || null, age: "just now", severity: body.severity, status: "Reported" };
   localState.incidents.unshift(incident);
   return incident;
 };
@@ -262,6 +275,12 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 422, { error: "Title, location, or description is too long" });
       }
       if (!allowedSeverities.has(body.severity)) return sendJson(res, 422, { error: "Invalid incident severity" });
+      const coordinates = [body.latitude, body.longitude];
+      if (coordinates.some((value) => value !== null && value !== undefined && (typeof value !== "number" || !Number.isFinite(value))) ||
+          (body.latitude !== null && body.latitude !== undefined && (body.latitude < -90 || body.latitude > 90)) ||
+          (body.longitude !== null && body.longitude !== undefined && (body.longitude < -180 || body.longitude > 180))) {
+        return sendJson(res, 422, { error: "Latitude must be between -90 and 90 and longitude between -180 and 180" });
+      }
       if (body.photo && (typeof body.photo.name !== "string" || typeof body.photo.dataUrl !== "string")) {
         return sendJson(res, 422, { error: "Invalid photo data" });
       }
