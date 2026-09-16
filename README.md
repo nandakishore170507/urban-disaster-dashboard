@@ -18,8 +18,6 @@ Create a Storage bucket named `incident-photos` before submitting reports. The b
 
 If you already ran the schema, run it again after updates so the `dispatch_incident` transaction function is created. The function should only be callable by the backend service role.
 
-For the interactive map, run the updated schema once more so `incidents.latitude` and `incidents.longitude` are added. Reports may include coordinates; existing Kochi seed locations use built-in fallback coordinates.
-
 ## Run locally
 
 ```powershell

@@ -9,18 +9,12 @@ const { createClient } = require("@supabase/supabase-js");
 
 const root = __dirname;
 const port = Number(process.env.PORT || 4173);
-const host = process.env.HOST || "0.0.0.0";
+const host = process.env.HOST || "127.0.0.1";
 const photoBucket = process.env.SUPABASE_STORAGE_BUCKET || "incident-photos";
 const maxPhotoBytes = 8 * 1024 * 1024;
 const maxBodyBytes = Math.ceil(maxPhotoBytes * 1.4);
 const allowedSeverities = new Set(["Low", "Medium", "High", "Critical"]);
 const allowedStatuses = new Set(["Reported", "Assigned", "Responding", "Resolved"]);
-const knownCoordinates = {
-  Palarivattom: [9.9972, 76.3071],
-  "Kaloor junction": [10.0014, 76.2999],
-  "Vyttila ward": [9.9678, 76.3189],
-  Edappally: [10.0261, 76.3086]
-};
 const seedState = {
   incidents: [
     { id: "inc-001", title: "Canal overflow", location: "Palarivattom", age: "14 min ago", severity: "Critical", status: "Reported" },
@@ -61,36 +55,31 @@ const sendJson = (res, status, payload) => {
 
 const readBody = (req) => new Promise((resolve, reject) => {
   let body = "";
-  let tooLarge = false;
   req.on("data", (chunk) => {
-    if (tooLarge) return;
     body += chunk;
-    if (Buffer.byteLength(body) > maxBodyBytes) tooLarge = true;
+    if (Buffer.byteLength(body) > maxBodyBytes) {
+      reject(new Error("Request is too large. Images must be 8 MB or smaller."));
+      req.destroy();
+    }
   });
   req.on("end", () => {
-    if (tooLarge) return reject(Object.assign(new Error("Request is too large. Images must be 8 MB or smaller."), { statusCode: 413 }));
     if (!body) return resolve({});
     try { resolve(JSON.parse(body)); } catch { reject(new Error("Request body must be valid JSON")); }
   });
   req.on("error", reject);
 });
 
-const formatIncident = (incident, photoUrl = null) => {
-  const fallback = knownCoordinates[incident.location] || null;
-  return {
+const formatIncident = (incident, photoUrl = null) => ({
   id: incident.id,
   title: incident.title,
   location: incident.location,
-  latitude: incident.latitude ?? fallback?.[0] ?? null,
-  longitude: incident.longitude ?? fallback?.[1] ?? null,
   description: incident.description,
   photoName: incident.photo_name || null,
   photoUrl,
   age: incident.created_at ? relativeAge(incident.created_at) : incident.age,
   severity: incident.severity,
   status: incident.status
-  };
-};
+});
 
 const getPhotoUrl = async (photoPath) => {
   if (!supabase || !photoPath) return null;
@@ -168,22 +157,13 @@ const createIncident = async (body) => {
       });
       if (upload.error) throw upload.error;
       }
-      const incidentValues = {
+      const { data, error } = await supabase.from("incidents").insert({
         title: body.title,
         location: body.location,
-        latitude: body.latitude ?? null,
-        longitude: body.longitude ?? null,
         description: body.description,
         photo_name: photoPath,
         severity: body.severity
-      };
-      let { data, error } = await supabase.from("incidents").insert(incidentValues).select().single();
-      if (error?.code === "PGRST204") {
-        const legacyValues = { ...incidentValues };
-        delete legacyValues.latitude;
-        delete legacyValues.longitude;
-        ({ data, error } = await supabase.from("incidents").insert(legacyValues).select().single());
-      }
+      }).select().single();
       if (error) throw error;
       return formatIncidentWithPhoto(data);
     } catch (error) {
@@ -191,7 +171,7 @@ const createIncident = async (body) => {
       throw error;
     }
   }
-  const incident = { id: `inc-${Date.now()}`, title: body.title, location: body.location, latitude: body.latitude ?? null, longitude: body.longitude ?? null, description: body.description, photoName: body.photoName || null, age: "just now", severity: body.severity, status: "Reported" };
+  const incident = { id: `inc-${Date.now()}`, title: body.title, location: body.location, description: body.description, photoName: body.photoName || null, age: "just now", severity: body.severity, status: "Reported" };
   localState.incidents.unshift(incident);
   return incident;
 };
@@ -220,25 +200,8 @@ const dispatchIncident = async (incidentId) => {
     p_incident_id: incidentId,
     p_team_id: team.id
     });
-    if (!error) return { incident: formatIncident(data.incident), team: data.team };
-    if (error.code !== "PGRST202" && error.code !== "42883") throw error;
-
-    const incidentUpdate = await supabase.from("incidents")
-    .update({ status: "Assigned", updated_at: new Date().toISOString() })
-    .eq("id", incidentId)
-    .select()
-    .single();
-    if (incidentUpdate.error) throw incidentUpdate.error;
-    const teamUpdate = await supabase.from("response_teams")
-    .update({ status: "En route", assignment: `${current.data.title} · ${current.data.location}`, eta: "08 min" })
-    .eq("id", team.id)
-    .select()
-    .single();
-    if (teamUpdate.error) throw teamUpdate.error;
-    const assignment = await supabase.from("incident_assignments")
-    .upsert({ incident_id: incidentId, team_id: team.id }, { onConflict: "incident_id,team_id" });
-    if (assignment.error) throw assignment.error;
-    return { incident: formatIncident(incidentUpdate.data), team: teamUpdate.data };
+    if (error) throw error;
+    return { incident: formatIncident(data.incident), team: data.team };
   }
   const incident = localState.incidents.find((item) => item.id === incidentId) || localState.incidents[0];
   const team = localState.teams.find((item) => item.status === "Standby") || localState.teams[0];
@@ -282,12 +245,6 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 422, { error: "Title, location, or description is too long" });
       }
       if (!allowedSeverities.has(body.severity)) return sendJson(res, 422, { error: "Invalid incident severity" });
-      const coordinates = [body.latitude, body.longitude];
-      if (coordinates.some((value) => value !== null && value !== undefined && (typeof value !== "number" || !Number.isFinite(value))) ||
-          (body.latitude !== null && body.latitude !== undefined && (body.latitude < -90 || body.latitude > 90)) ||
-          (body.longitude !== null && body.longitude !== undefined && (body.longitude < -180 || body.longitude > 180))) {
-        return sendJson(res, 422, { error: "Latitude must be between -90 and 90 and longitude between -180 and 180" });
-      }
       if (body.photo && (typeof body.photo.name !== "string" || typeof body.photo.dataUrl !== "string")) {
         return sendJson(res, 422, { error: "Invalid photo data" });
       }
@@ -328,16 +285,20 @@ const server = http.createServer(async (req, res) => {
     console.error(error);
     const message = error?.code === "PGRST205"
       ? "Supabase tables are not ready. Run supabase/schema.sql in the Supabase SQL Editor."
-      : error?.statusCode === 413
-        ? "The image is too large. Choose a smaller photo and try again."
       : error?.message?.includes("Connect Timeout")
         ? "Supabase could not be reached. Check your internet connection and try again."
         : "The request could not be completed";
-    sendJson(res, error?.statusCode === 413 ? 413 : error?.code === "PGRST205" ? 503 : 500, { error: message });
+    sendJson(res, error?.code === "PGRST205" ? 503 : 500, { error: message });
   }
 });
 
-server.listen(port, host, () => {
-  console.log(`Aegis backend running at http://localhost:${port} (${supabase ? "Supabase" : "local fallback"})`);
-  ensurePhotoBucket().catch((error) => console.error("Unable to prepare Supabase Storage:", error));
-});
+ensurePhotoBucket()
+  .then(() => server.listen(port, host, () => {
+    console.log(`Aegis backend running at http://localhost:${port} (${supabase ? "Supabase" : "local fallback"})`);
+  }))
+  .catch((error) => {
+    console.error("Unable to prepare Supabase Storage:", error);
+    server.listen(port, host, () => {
+      console.log(`Aegis backend running at http://localhost:${port} (Storage setup pending)`);
+    });
+  });

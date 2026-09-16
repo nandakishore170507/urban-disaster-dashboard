@@ -4,8 +4,6 @@ const modalTitle = document.getElementById("modalTitle");
 const modalSubtitle = document.getElementById("modalSubtitle");
 const modalBody = document.getElementById("modalBody");
 const incidentPhotoUrls = new Map();
-let worldMap;
-const mapMarkers = [];
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
@@ -36,21 +34,9 @@ const showToast = (message) => {
 
 const readImageAsDataUrl = (file) => new Promise((resolve, reject) => {
   if (!file || !file.size) return resolve(null);
+  if (file.size > 8 * 1024 * 1024) return reject(new Error("Images must be 8 MB or smaller."));
   const reader = new FileReader();
-  reader.onload = () => {
-    const image = new Image();
-    image.onload = () => {
-      const maxDimension = 1800;
-      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve({ name: file.name.replace(/\.[^.]+$/, ".jpg"), dataUrl: canvas.toDataURL("image/jpeg", 0.78) });
-    };
-    image.onerror = () => reject(new Error("The selected image could not be read."));
-    image.src = reader.result;
-  };
+  reader.onload = () => resolve({ name: file.name, dataUrl: reader.result });
   reader.onerror = () => reject(new Error("The selected image could not be read."));
   reader.readAsDataURL(file);
 });
@@ -75,7 +61,6 @@ const renderDashboard = (data) => {
     }).join("");
     bindIncidentSelection();
   }
-  renderWorldMap(data.incidents);
   const teamRows = document.querySelector(".table-panel tbody");
   if (teamRows) {
     teamRows.innerHTML = data.teams.map((team) => `<tr><td><span class="team-icon">↟</span> ${escapeHtml(team.name)}</td><td>${escapeHtml(team.assignment || "Unassigned")}</td><td><span class="status ${team.status === "Standby" ? "waiting-status" : "active-status"}">● ${escapeHtml(team.status)}</span></td><td>${escapeHtml(team.eta)}</td></tr>`).join("");
@@ -86,35 +71,6 @@ const renderDashboard = (data) => {
     const alertText = alertBanner.querySelector("div:nth-child(2)");
     if (alertText) alertText.innerHTML = `<strong>${escapeHtml(data.alert.title)}</strong><span>${escapeHtml(data.alert.message)}</span>`;
   }
-};
-
-const renderWorldMap = (incidents) => {
-  if (!window.L || !document.getElementById("worldMap")) return;
-  if (!worldMap) {
-    worldMap = L.map("worldMap", { worldCopyJump: true }).setView([9.9312, 76.2673], 5);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19
-    }).addTo(worldMap);
-  }
-  mapMarkers.splice(0).forEach((marker) => marker.remove());
-  const locatedIncidents = incidents.filter((incident) => Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude));
-  locatedIncidents.forEach((incident) => {
-    const color = incident.severity === "Critical" ? "#e9655e" : incident.severity === "High" ? "#eca04c" : "#5796e2";
-    const marker = L.circleMarker([incident.latitude, incident.longitude], {
-      radius: 8,
-      color,
-      fillColor: color,
-      fillOpacity: 0.85,
-      weight: 2
-    }).addTo(worldMap);
-    marker.bindPopup(`<strong>${escapeHtml(incident.title)}</strong><br>${escapeHtml(incident.location)}<br>${escapeHtml(incident.severity)}`);
-    mapMarkers.push(marker);
-  });
-  if (locatedIncidents.length > 1) {
-    worldMap.fitBounds(L.featureGroup(mapMarkers).getBounds().pad(0.25), { maxZoom: 12 });
-  }
-  window.setTimeout(() => worldMap.invalidateSize(), 0);
 };
 
 const bindIncidentSelection = () => {
@@ -164,7 +120,6 @@ const openReportForm = () => {
   modalBody.innerHTML = `<form class="report-form" id="reportForm">
     <label>Incident type<input name="title" required placeholder="e.g. Flooded road"></label>
     <label>Location<input name="location" required placeholder="Area, ward, or landmark"></label>
-    <div class="coordinate-fields"><label>Latitude<input name="latitude" type="number" min="-90" max="90" step="any" placeholder="e.g. 9.9312"></label><label>Longitude<input name="longitude" type="number" min="-180" max="180" step="any" placeholder="e.g. 76.2673"></label></div>
     <label>Severity<select name="severity"><option>Medium</option><option>High</option><option>Critical</option></select></label>
     <label>Description<textarea name="description" required rows="4" placeholder="What is happening? Who needs help?"></textarea></label>
     <label>Photo evidence<input name="photo" type="file" accept="image/*"></label>
@@ -174,20 +129,13 @@ const openReportForm = () => {
   document.getElementById("reportForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
     try {
-      if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.textContent = "Submitting…";
-      }
       const photo = await readImageAsDataUrl(form.get("photo"));
       const result = await api("/incidents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.get("title"), location: form.get("location"),
-          latitude: form.get("latitude") ? Number(form.get("latitude")) : null,
-          longitude: form.get("longitude") ? Number(form.get("longitude")) : null,
           severity: form.get("severity"), description: form.get("description"),
           photo
         })
@@ -197,10 +145,6 @@ const openReportForm = () => {
       window.setTimeout(() => window.location.reload(), 700);
     } catch (error) {
       showToast(error.message);
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = "Submit report →";
-      }
     }
   });
 };
@@ -258,10 +202,7 @@ document.getElementById("dispatchButton").addEventListener("click", () => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ incidentId })
-  }).then((data) => {
-    showToast(data.message);
-    window.setTimeout(() => window.location.reload(), 700);
-  }).catch((error) => showToast(error.message));
+  }).then((data) => showToast(data.message)).catch((error) => showToast(error.message));
 });
 
 document.getElementById("exportButton").addEventListener("click", () => {
@@ -279,15 +220,6 @@ document.getElementById("exportButton").addEventListener("click", () => {
 
 document.querySelector(".icon-button").addEventListener("click", () => {
   showToast("No new emergency notifications");
-});
-
-document.querySelector(".profile").addEventListener("click", () => {
-  openModal(
-    "Officer profile",
-    "Current command-center operator",
-    [["Name", "Riya Kapoor"], ["Role", "District coordinator"], ["Access", "Operations and dispatch"], ["Status", "On duty"]],
-    ""
-  );
 });
 
 document.querySelectorAll(".more").forEach((button) => {
