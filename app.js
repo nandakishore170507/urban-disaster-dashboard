@@ -202,7 +202,10 @@ document.getElementById("dispatchButton").addEventListener("click", () => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ incidentId })
-  }).then((data) => showToast(data.message)).catch((error) => showToast(error.message));
+  }).then((data) => {
+    showToast(data.message);
+    window.setTimeout(() => window.location.reload(), 700);
+  }).catch((error) => showToast(error.message));
 });
 
 document.getElementById("exportButton").addEventListener("click", () => {
@@ -220,6 +223,15 @@ document.getElementById("exportButton").addEventListener("click", () => {
 
 document.querySelector(".icon-button").addEventListener("click", () => {
   showToast("No new emergency notifications");
+});
+
+document.querySelector(".profile").addEventListener("click", () => {
+  openModal(
+    "Officer profile",
+    "Current command-center operator",
+    [["Name", "Riya Kapoor"], ["Role", "District coordinator"], ["Access", "Operations and dispatch"], ["Status", "On duty"]],
+    ""
+  );
 });
 
 document.querySelectorAll(".more").forEach((button) => {

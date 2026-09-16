@@ -200,8 +200,25 @@ const dispatchIncident = async (incidentId) => {
     p_incident_id: incidentId,
     p_team_id: team.id
     });
-    if (error) throw error;
-    return { incident: formatIncident(data.incident), team: data.team };
+    if (!error) return { incident: formatIncident(data.incident), team: data.team };
+    if (error.code !== "PGRST202" && error.code !== "42883") throw error;
+
+    const incidentUpdate = await supabase.from("incidents")
+    .update({ status: "Assigned", updated_at: new Date().toISOString() })
+    .eq("id", incidentId)
+    .select()
+    .single();
+    if (incidentUpdate.error) throw incidentUpdate.error;
+    const teamUpdate = await supabase.from("response_teams")
+    .update({ status: "En route", assignment: `${current.data.title} · ${current.data.location}`, eta: "08 min" })
+    .eq("id", team.id)
+    .select()
+    .single();
+    if (teamUpdate.error) throw teamUpdate.error;
+    const assignment = await supabase.from("incident_assignments")
+    .upsert({ incident_id: incidentId, team_id: team.id }, { onConflict: "incident_id,team_id" });
+    if (assignment.error) throw assignment.error;
+    return { incident: formatIncident(incidentUpdate.data), team: teamUpdate.data };
   }
   const incident = localState.incidents.find((item) => item.id === incidentId) || localState.incidents[0];
   const team = localState.teams.find((item) => item.status === "Standby") || localState.teams[0];
