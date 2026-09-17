@@ -59,24 +59,6 @@ const sendJson = (res, status, payload) => {
   res.end(JSON.stringify(payload));
 };
 
-const sendAuthConfig = (res) => sendJson(res, 200, {
-  supabaseUrl,
-  supabaseAnonKey: process.env.SUPABASE_ANON_KEY || null
-});
-
-const getUserCounts = async () => {
-  if (!supabase) return { total: 0, citizens: 0, coordinators: 0 };
-  const { data: users, error: usersError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (usersError) throw usersError;
-  const { data: profiles, error: profilesError } = await supabase.from("profiles").select("role");
-  if (profilesError) throw profilesError;
-  return {
-    total: users.users.length,
-    citizens: profiles.filter((profile) => profile.role === "citizen").length,
-    coordinators: profiles.filter((profile) => profile.role === "coordinator").length
-  };
-};
-
 const readBody = (req) => new Promise((resolve, reject) => {
   let body = "";
   let tooLarge = false;
@@ -288,8 +270,6 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/health" && req.method === "GET") {
       return sendJson(res, 200, { ok: true, service: "aegis-response-api", database: supabase ? "supabase" : "local-fallback", timestamp: new Date().toISOString() });
     }
-    if (url.pathname === "/api/config" && req.method === "GET") return sendAuthConfig(res);
-    if (url.pathname === "/api/user-counts" && req.method === "GET") return sendJson(res, 200, await getUserCounts());
     if (url.pathname === "/api/dashboard" && req.method === "GET") return sendJson(res, 200, await dashboard());
     if (url.pathname === "/api/incidents" && req.method === "GET") return sendJson(res, 200, { incidents: (await dashboard()).incidents });
     if (url.pathname === "/api/incidents" && req.method === "POST") {

@@ -6,9 +6,6 @@ const modalBody = document.getElementById("modalBody");
 const incidentPhotoUrls = new Map();
 let worldMap;
 const mapMarkers = [];
-let authClient;
-let authMode = "signin";
-let currentProfile;
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
@@ -36,109 +33,6 @@ const showToast = (message) => {
   window.clearTimeout(showToast.timer);
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2800);
 };
-
-const authScreen = document.getElementById("authScreen");
-const authForm = document.getElementById("authForm");
-const authTitle = document.getElementById("authTitle");
-const authSubtitle = document.getElementById("authSubtitle");
-const authSubmit = document.getElementById("authSubmit");
-const authSwitch = document.getElementById("authSwitch");
-const authSwitchText = document.getElementById("authSwitchText");
-const authError = document.getElementById("authError");
-const authRedirectUrl = () => `${window.location.origin}${window.location.pathname}`;
-const getAuthErrorMessage = (error) => {
-  const message = String(error?.message || error || "Authentication failed");
-  if (/error sending confirmation email|confirmation email/i.test(message)) {
-    return "Supabase could not send the confirmation email. Check Supabase SMTP settings, the verified sender address, and the email provider logs.";
-  }
-  if (/invalid login credentials/i.test(message)) {
-    return "The email or password is incorrect. Confirm your email first if this is a new account.";
-  }
-  if (/user already registered/i.test(message)) {
-    return "This email is already registered. Switch to Sign in, or use a different email address.";
-  }
-  return message;
-};
-const setAuthMode = (mode) => {
-  authMode = mode;
-  const signup = mode === "signup";
-  document.querySelectorAll(".signup-only").forEach((element) => { element.style.display = signup ? "" : "none"; });
-  authTitle.textContent = signup ? "Create your Aegis profile" : "Welcome to Aegis";
-  authSubtitle.textContent = signup ? "Choose your role and add basic details to get started." : "Sign in to report incidents or coordinate emergency response.";
-  authSubmit.textContent = signup ? "Create account →" : "Sign in →";
-  authSwitchText.textContent = signup ? "Already registered?" : "New to Aegis?";
-  authSwitch.textContent = signup ? "Sign in" : "Create an account";
-  authError.textContent = "";
-};
-
-const saveProfile = async (user, values) => {
-  const { error } = await authClient.from("profiles").upsert({
-    id: user.id,
-    full_name: values.fullName,
-    phone: values.phone || null,
-    role: values.role,
-    last_seen_at: new Date().toISOString()
-  });
-  if (error) throw error;
-};
-
-const enterDashboard = async (user) => {
-  const profileResult = await authClient.from("profiles").select("*").eq("id", user.id).maybeSingle();
-  if (profileResult.error) throw profileResult.error;
-  currentProfile = profileResult.data;
-  if (!currentProfile) {
-    await saveProfile(user, { fullName: user.user_metadata?.full_name || user.email?.split("@")[0] || "Aegis user", phone: user.user_metadata?.phone, role: user.user_metadata?.role || "citizen" });
-    currentProfile = (await authClient.from("profiles").select("*").eq("id", user.id).single()).data;
-  } else {
-    const { error } = await authClient.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", user.id);
-    if (error) throw error;
-  }
-  authScreen.classList.add("hidden");
-  document.querySelector(".profile strong").textContent = currentProfile.full_name;
-  document.querySelector(".profile span").textContent = currentProfile.role === "coordinator" ? "District coordinator" : "Citizen reporter";
-  document.querySelector(".avatar").textContent = currentProfile.full_name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-  api("/dashboard").then(renderDashboard).catch((error) => showToast(error.message));
-};
-
-authSwitch.addEventListener("click", () => setAuthMode(authMode === "signin" ? "signup" : "signin"));
-authForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  authError.textContent = "";
-  const values = Object.fromEntries(new FormData(authForm));
-  try {
-    authSubmit.disabled = true;
-    if (authMode === "signup") {
-      const result = await authClient.auth.signUp({
-        email: values.email,
-        password: values.password,
-        options: {
-          emailRedirectTo: authRedirectUrl(),
-          data: { full_name: values.fullName, phone: values.phone, role: values.role }
-        }
-      });
-      if (result.error) throw result.error;
-      if (!result.data.session) {
-        authForm.reset();
-        setAuthMode("signin");
-        authError.classList.add("success");
-        authError.textContent = `Confirmation email sent to ${values.email}. Open it, then sign in here.`;
-        return;
-      }
-      authError.classList.remove("success");
-      await saveProfile(result.data.user, values);
-      await enterDashboard(result.data.user);
-    } else {
-      const result = await authClient.auth.signInWithPassword({ email: values.email, password: values.password });
-      if (result.error) throw result.error;
-      await enterDashboard(result.data.user);
-    }
-  } catch (error) {
-    authError.classList.remove("success");
-    authError.textContent = getAuthErrorMessage(error);
-  } finally {
-    authSubmit.disabled = false;
-  }
-});
 
 const readImageAsDataUrl = (file) => new Promise((resolve, reject) => {
   if (!file || !file.size) return resolve(null);
@@ -249,6 +143,8 @@ const bindIncidentSelection = () => {
     });
   });
 };
+
+api("/dashboard").then(renderDashboard).catch((error) => showToast(error.message));
 
 const openModal = (title, subtitle, rows, actionLabel) => {
   modalTitle.textContent = title;
@@ -386,24 +282,12 @@ document.querySelector(".icon-button").addEventListener("click", () => {
 });
 
 document.querySelector(".profile").addEventListener("click", () => {
-  modalTitle.textContent = "Your Aegis profile";
-  modalSubtitle.textContent = "Account and access details";
-  modalBody.innerHTML = `<div class="detail-list">
-    <div class="detail-row"><span>Name</span><strong>${escapeHtml(currentProfile?.full_name || "Aegis user")}</strong></div>
-    <div class="detail-row"><span>Role</span><strong>${escapeHtml(currentProfile?.role || "citizen")}</strong></div>
-    <div class="detail-row"><span>Phone</span><strong>${escapeHtml(currentProfile?.phone || "Not provided")}</strong></div>
-  </div><div id="userCounts" class="profile-counts"></div><button class="modal-action" id="signOutButton">Sign out →</button>`;
-  modalBackdrop.classList.add("open");
-  if (currentProfile?.role === "coordinator") {
-    api("/user-counts").then((counts) => {
-      const countsElement = document.getElementById("userCounts");
-      if (countsElement) countsElement.textContent = `${counts.total} registered users · ${counts.citizens} citizens · ${counts.coordinators} coordinators`;
-    }).catch((error) => showToast(error.message));
-  }
-  document.getElementById("signOutButton").addEventListener("click", async () => {
-    await authClient.auth.signOut();
-    window.location.reload();
-  });
+  openModal(
+    "Officer profile",
+    "Current command-center operator",
+    [["Name", "Riya Kapoor"], ["Role", "District coordinator"], ["Access", "Operations and dispatch"], ["Status", "On duty"]],
+    ""
+  );
 });
 
 document.querySelectorAll(".more").forEach((button) => {
@@ -429,28 +313,4 @@ document.querySelectorAll(".map-pin").forEach((pin) => {
     window.clearTimeout(pin.tooltipTimer);
     pin.tooltipTimer = window.setTimeout(() => (tooltip.style.display = "none"), 2600);
   });
-});
-
-const initializeAuth = async () => {
-  const config = await api("/config");
-  if (!window.supabase?.createClient || !config.supabaseUrl || !config.supabaseAnonKey) {
-    throw new Error("Supabase Auth is not configured on this deployment.");
-  }
-  authClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-  const sessionResult = await authClient.auth.getSession();
-  if (sessionResult.error) throw sessionResult.error;
-  if (sessionResult.data.session?.user) {
-    await enterDashboard(sessionResult.data.session.user);
-  } else {
-    setAuthMode("signin");
-  }
-  authClient.auth.onAuthStateChange((_event, session) => {
-    if (session?.user && authScreen.classList.contains("hidden") === false) {
-      enterDashboard(session.user).catch((error) => { authError.textContent = getAuthErrorMessage(error); });
-    }
-  });
-};
-
-initializeAuth().catch((error) => {
-  authError.textContent = getAuthErrorMessage(error);
 });
