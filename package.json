@@ -5,5 +5,9 @@
   "description": "Demo-first urban disaster response dashboard and REST API",
   "scripts": {
     "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "dotenv": "^17.2.2"
   }
 }
