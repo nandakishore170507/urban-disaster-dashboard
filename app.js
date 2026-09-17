@@ -36,9 +36,21 @@ const showToast = (message) => {
 
 const readImageAsDataUrl = (file) => new Promise((resolve, reject) => {
   if (!file || !file.size) return resolve(null);
-  if (file.size > 8 * 1024 * 1024) return reject(new Error("Images must be 8 MB or smaller."));
   const reader = new FileReader();
-  reader.onload = () => resolve({ name: file.name, dataUrl: reader.result });
+  reader.onload = () => {
+    const image = new Image();
+    image.onload = () => {
+      const maxDimension = 1800;
+      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve({ name: file.name.replace(/\.[^.]+$/, ".jpg"), dataUrl: canvas.toDataURL("image/jpeg", 0.78) });
+    };
+    image.onerror = () => reject(new Error("The selected image could not be read."));
+    image.src = reader.result;
+  };
   reader.onerror = () => reject(new Error("The selected image could not be read."));
   reader.readAsDataURL(file);
 });
@@ -162,7 +174,12 @@ const openReportForm = () => {
   document.getElementById("reportForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
     try {
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Submitting…";
+      }
       const photo = await readImageAsDataUrl(form.get("photo"));
       const result = await api("/incidents", {
         method: "POST",
@@ -180,6 +197,10 @@ const openReportForm = () => {
       window.setTimeout(() => window.location.reload(), 700);
     } catch (error) {
       showToast(error.message);
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Submit report →";
+      }
     }
   });
 };

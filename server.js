@@ -9,7 +9,7 @@ const { createClient } = require("@supabase/supabase-js");
 
 const root = __dirname;
 const port = Number(process.env.PORT || 4173);
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || "0.0.0.0";
 const photoBucket = process.env.SUPABASE_STORAGE_BUCKET || "incident-photos";
 const maxPhotoBytes = 8 * 1024 * 1024;
 const maxBodyBytes = Math.ceil(maxPhotoBytes * 1.4);
@@ -61,14 +61,14 @@ const sendJson = (res, status, payload) => {
 
 const readBody = (req) => new Promise((resolve, reject) => {
   let body = "";
+  let tooLarge = false;
   req.on("data", (chunk) => {
+    if (tooLarge) return;
     body += chunk;
-    if (Buffer.byteLength(body) > maxBodyBytes) {
-      reject(new Error("Request is too large. Images must be 8 MB or smaller."));
-      req.destroy();
-    }
+    if (Buffer.byteLength(body) > maxBodyBytes) tooLarge = true;
   });
   req.on("end", () => {
+    if (tooLarge) return reject(Object.assign(new Error("Request is too large. Images must be 8 MB or smaller."), { statusCode: 413 }));
     if (!body) return resolve({});
     try { resolve(JSON.parse(body)); } catch { reject(new Error("Request body must be valid JSON")); }
   });
@@ -168,7 +168,7 @@ const createIncident = async (body) => {
       });
       if (upload.error) throw upload.error;
       }
-      const { data, error } = await supabase.from("incidents").insert({
+      const incidentValues = {
         title: body.title,
         location: body.location,
         latitude: body.latitude ?? null,
@@ -176,7 +176,14 @@ const createIncident = async (body) => {
         description: body.description,
         photo_name: photoPath,
         severity: body.severity
-      }).select().single();
+      };
+      let { data, error } = await supabase.from("incidents").insert(incidentValues).select().single();
+      if (error?.code === "PGRST204") {
+        const legacyValues = { ...incidentValues };
+        delete legacyValues.latitude;
+        delete legacyValues.longitude;
+        ({ data, error } = await supabase.from("incidents").insert(legacyValues).select().single());
+      }
       if (error) throw error;
       return formatIncidentWithPhoto(data);
     } catch (error) {
@@ -321,20 +328,16 @@ const server = http.createServer(async (req, res) => {
     console.error(error);
     const message = error?.code === "PGRST205"
       ? "Supabase tables are not ready. Run supabase/schema.sql in the Supabase SQL Editor."
+      : error?.statusCode === 413
+        ? "The image is too large. Choose a smaller photo and try again."
       : error?.message?.includes("Connect Timeout")
         ? "Supabase could not be reached. Check your internet connection and try again."
         : "The request could not be completed";
-    sendJson(res, error?.code === "PGRST205" ? 503 : 500, { error: message });
+    sendJson(res, error?.statusCode === 413 ? 413 : error?.code === "PGRST205" ? 503 : 500, { error: message });
   }
 });
 
-ensurePhotoBucket()
-  .then(() => server.listen(port, host, () => {
-    console.log(`Aegis backend running at http://localhost:${port} (${supabase ? "Supabase" : "local fallback"})`);
-  }))
-  .catch((error) => {
-    console.error("Unable to prepare Supabase Storage:", error);
-    server.listen(port, host, () => {
-      console.log(`Aegis backend running at http://localhost:${port} (Storage setup pending)`);
-    });
-  });
+server.listen(port, host, () => {
+  console.log(`Aegis backend running at http://localhost:${port} (${supabase ? "Supabase" : "local fallback"})`);
+  ensurePhotoBucket().catch((error) => console.error("Unable to prepare Supabase Storage:", error));
+});
