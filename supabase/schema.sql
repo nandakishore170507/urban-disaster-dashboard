@@ -1,5 +1,22 @@
 create extension if not exists pgcrypto;
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text not null,
+  phone text,
+  role text not null default 'citizen' check (role in ('citizen', 'coordinator')),
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+drop policy if exists "Users can read their own profile" on public.profiles;
+drop policy if exists "Users can create their own profile" on public.profiles;
+drop policy if exists "Users can update their own profile" on public.profiles;
+create policy "Users can read their own profile" on public.profiles for select using (auth.uid() = id);
+create policy "Users can create their own profile" on public.profiles for insert with check (auth.uid() = id);
+create policy "Users can update their own profile" on public.profiles for update using (auth.uid() = id);
+
 create table if not exists public.incidents (
   id uuid primary key default gen_random_uuid(),
   title text not null,
