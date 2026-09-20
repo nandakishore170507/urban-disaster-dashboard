@@ -403,28 +403,28 @@ document.querySelectorAll(".map-pin").forEach((pin) => {
     window.clearTimeout(pin.tooltipTimer);
     pin.tooltipTimer = window.setTimeout(() => (tooltip.style.display = "none"), 2600);
   });
+});
 
-  const initializeAuth = async () => {
-    const config = await api("/config");
-    if (!window.supabase?.createClient || !config.supabaseUrl || !config.supabaseAnonKey) {
-      throw new Error("Supabase Auth is not configured on this deployment.");
+const initializeAuth = async () => {
+  const config = await api("/config");
+  if (!window.supabase?.createClient || !config.supabaseUrl || !config.supabaseAnonKey) {
+    throw new Error("Supabase Auth is not configured on this deployment.");
+  }
+  authClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  const sessionResult = await authClient.auth.getSession();
+  if (sessionResult.error) throw sessionResult.error;
+  if (sessionResult.data.session?.user) {
+    await enterDashboard(sessionResult.data.session.user);
+  } else {
+    setAuthMode("signin");
+  }
+  authClient.auth.onAuthStateChange((_event, session) => {
+    if (session?.user && authScreen.classList.contains("hidden") === false) {
+      enterDashboard(session.user).catch((error) => { authError.textContent = error.message; });
     }
-    authClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
-    const sessionResult = await authClient.auth.getSession();
-    if (sessionResult.error) throw sessionResult.error;
-    if (sessionResult.data.session?.user) {
-      await enterDashboard(sessionResult.data.session.user);
-    } else {
-      setAuthMode("signin");
-    }
-    authClient.auth.onAuthStateChange((_event, session) => {
-      if (session?.user && authScreen.classList.contains("hidden") === false) {
-        enterDashboard(session.user).catch((error) => { authError.textContent = error.message; });
-      }
-    });
-  };
-
-  initializeAuth().catch((error) => {
-    authError.textContent = error.message;
   });
+};
+
+initializeAuth().catch((error) => {
+  authError.textContent = error.message;
 });
