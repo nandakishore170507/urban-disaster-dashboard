@@ -96,7 +96,10 @@ authForm.addEventListener("submit", async (event) => {
       const result = await authClient.auth.signUp({
         email: values.email,
         password: values.password,
-        options: { data: { full_name: values.fullName, phone: values.phone, role: values.role } }
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: { full_name: values.fullName, phone: values.phone, role: values.role }
+        }
       });
       if (result.error) throw result.error;
       if (!result.data.session) throw new Error("Account created. Check your email to confirm your account, then sign in.");
