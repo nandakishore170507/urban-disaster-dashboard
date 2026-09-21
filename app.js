@@ -45,6 +45,7 @@ const authSubmit = document.getElementById("authSubmit");
 const authSwitch = document.getElementById("authSwitch");
 const authSwitchText = document.getElementById("authSwitchText");
 const authError = document.getElementById("authError");
+const authRedirectUrl = () => `${window.location.origin}${window.location.pathname}`;
 const setAuthMode = (mode) => {
   authMode = mode;
   const signup = mode === "signup";
@@ -97,12 +98,19 @@ authForm.addEventListener("submit", async (event) => {
         email: values.email,
         password: values.password,
         options: {
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: authRedirectUrl(),
           data: { full_name: values.fullName, phone: values.phone, role: values.role }
         }
       });
       if (result.error) throw result.error;
-      if (!result.data.session) throw new Error("Account created. Check your email to confirm your account, then sign in.");
+      if (!result.data.session) {
+        authForm.reset();
+        setAuthMode("signin");
+        authError.classList.add("success");
+        authError.textContent = `Confirmation email sent to ${values.email}. Open it, then sign in here.`;
+        return;
+      }
+      authError.classList.remove("success");
       await saveProfile(result.data.user, values);
       await enterDashboard(result.data.user);
     } else {
@@ -111,6 +119,7 @@ authForm.addEventListener("submit", async (event) => {
       await enterDashboard(result.data.user);
     }
   } catch (error) {
+    authError.classList.remove("success");
     authError.textContent = error.message;
   } finally {
     authSubmit.disabled = false;

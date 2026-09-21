@@ -16,6 +16,8 @@ The service-role/secret key is used only by `server.js`; never expose it in brow
 
 Create a Storage bucket named `incident-photos` before submitting reports. The bucket can remain private because the API creates a signed photo URL for each incident. You can override the bucket name with `SUPABASE_STORAGE_BUCKET`.
 
+For email confirmation, open Supabase **Authentication → URL Configuration** and set the deployed site URL to `https://urban-disaster-dashboard.onrender.com`. Add the same URL under **Redirect URLs**. The signup form sends `emailRedirectTo` using the current site address, so local and deployed signups return to the page where they started.
+
 If you already ran the schema, run it again after updates so the `dispatch_incident` transaction function is created. The function should only be callable by the backend service role.
 
 For the interactive map, run the updated schema once more so `incidents.latitude` and `incidents.longitude` are added. Reports may include coordinates; existing Kochi seed locations use built-in fallback coordinates.
