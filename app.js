@@ -46,6 +46,19 @@ const authSwitch = document.getElementById("authSwitch");
 const authSwitchText = document.getElementById("authSwitchText");
 const authError = document.getElementById("authError");
 const authRedirectUrl = () => `${window.location.origin}${window.location.pathname}`;
+const getAuthErrorMessage = (error) => {
+  const message = String(error?.message || error || "Authentication failed");
+  if (/error sending confirmation email|confirmation email/i.test(message)) {
+    return "Supabase could not send the confirmation email. Check Supabase SMTP settings, the verified sender address, and the email provider logs.";
+  }
+  if (/invalid login credentials/i.test(message)) {
+    return "The email or password is incorrect. Confirm your email first if this is a new account.";
+  }
+  if (/user already registered/i.test(message)) {
+    return "This email is already registered. Switch to Sign in, or use a different email address.";
+  }
+  return message;
+};
 const setAuthMode = (mode) => {
   authMode = mode;
   const signup = mode === "signup";
@@ -77,7 +90,8 @@ const enterDashboard = async (user) => {
     await saveProfile(user, { fullName: user.user_metadata?.full_name || user.email?.split("@")[0] || "Aegis user", phone: user.user_metadata?.phone, role: user.user_metadata?.role || "citizen" });
     currentProfile = (await authClient.from("profiles").select("*").eq("id", user.id).single()).data;
   } else {
-    await authClient.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", user.id);
+    const { error } = await authClient.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", user.id);
+    if (error) throw error;
   }
   authScreen.classList.add("hidden");
   document.querySelector(".profile strong").textContent = currentProfile.full_name;
@@ -120,7 +134,7 @@ authForm.addEventListener("submit", async (event) => {
     }
   } catch (error) {
     authError.classList.remove("success");
-    authError.textContent = error.message;
+    authError.textContent = getAuthErrorMessage(error);
   } finally {
     authSubmit.disabled = false;
   }
@@ -432,11 +446,11 @@ const initializeAuth = async () => {
   }
   authClient.auth.onAuthStateChange((_event, session) => {
     if (session?.user && authScreen.classList.contains("hidden") === false) {
-      enterDashboard(session.user).catch((error) => { authError.textContent = error.message; });
+      enterDashboard(session.user).catch((error) => { authError.textContent = getAuthErrorMessage(error); });
     }
   });
 };
 
 initializeAuth().catch((error) => {
-  authError.textContent = error.message;
+  authError.textContent = getAuthErrorMessage(error);
 });
