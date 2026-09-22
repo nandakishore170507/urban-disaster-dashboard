@@ -245,7 +245,18 @@ const openReportForm = () => {
           return;
         }
         suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}">${escapeHtml(place.label)} <span>${escapeHtml(place.symbol || "🌍")}</span></button>`).join("");
-        suggestions.querySelectorAll(".location-suggestion").forEach((button) => button.addEventListener("click", () => selectPlace(button)));
+        suggestions.querySelectorAll(".location-suggestion").forEach((button) => {
+          button.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            selectPlace(button);
+          });
+          button.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              selectPlace(button);
+            }
+          });
+        });
       } catch {
         if (currentRequestId === requestId) {
           clearSuggestions();
@@ -254,9 +265,12 @@ const openReportForm = () => {
       }
     }, 180);
   });
+  suggestions.addEventListener("pointerdown", (event) => event.preventDefault());
   locationInput.addEventListener("blur", () => {
     window.clearTimeout(suggestionTimer);
-    window.setTimeout(clearSuggestions, 120);
+    window.setTimeout(() => {
+      if (!suggestions.matches(":hover")) clearSuggestions();
+    }, 250);
   });
   reportForm.addEventListener("submit", async (event) => {
     event.preventDefault();

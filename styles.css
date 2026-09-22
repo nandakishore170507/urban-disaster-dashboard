@@ -36,3 +36,4 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .location-suggestions{display:grid;gap:6px;margin-top:8px}
 .location-suggestion{display:flex;justify-content:space-between;align-items:center;border:1px solid #e3eaef;background:#fff;border-radius:6px;padding:8px 10px;font:500 11px "DM Sans";color:#274054;cursor:pointer;text-align:left}
 .location-suggestion:hover{background:#edf8f5;border-color:#bce8db}
+.location-suggestions{position:relative;z-index:20;max-height:220px;overflow-y:auto}
