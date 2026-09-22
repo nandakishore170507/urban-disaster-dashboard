@@ -7,6 +7,7 @@ const incidentPhotoUrls = new Map();
 let worldMap;
 const mapMarkers = [];
 let lastFocusedElement;
+let dashboardData;
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
@@ -77,6 +78,7 @@ const readImageAsDataUrl = (file) => new Promise((resolve, reject) => {
 });
 
 const renderDashboard = (data) => {
+  dashboardData = data;
   markUpdated();
   const metricValues = document.querySelectorAll(".stat-card > strong");
   if (metricValues[0]) metricValues[0].textContent = data.metrics.activeIncidents;
@@ -244,18 +246,50 @@ document.querySelectorAll(".nav-item").forEach((item) => {
   item.addEventListener("click", () => {
     document.querySelectorAll(".nav-item").forEach((navItem) => navItem.classList.remove("active"));
     item.classList.add("active");
-    const name = item.textContent.trim().replace(/\s+\d+$/, "");
-    const views = {
-      "Situation room": ["Situation room", "Current city-wide operational picture", [["Active incidents", "12"], ["People at risk", "8,460"], ["Readiness", "94%"]]],
-      "Live incidents": ["Live incidents", "All active reports requiring coordination", [["Critical", "3 incidents"], ["High", "5 incidents"], ["Medium", "4 incidents"]]],
-      "Shelters & capacity": ["Shelters & capacity", "Current evacuation center availability", [["Open shelters", "8"], ["Beds available", "1,280"], ["Occupancy", "72%"]]],
-      Resources: ["Resources", "Rescue, medical and utility deployment", [["Teams deployed", "47 / 50"], ["Vehicles available", "18"], ["Medical kits", "324"]]],
-      "Public alerts": ["Public alerts", "Emergency communications sent to residents", [["Reach in 24 hours", "84.2K people"], ["Active advisories", "2"], ["Delivery rate", "98.6%"]]]
-    };
-    const view = views[name];
-    if (view) openModal(view[0], view[1], view[2], name === "Situation room" ? "" : `Open ${name}`);
+    openNavigationView(item.dataset.view);
   });
 });
+
+const openNavigationView = (name) => {
+  const data = dashboardData;
+  if (name === "Situation room") {
+    closeModal();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showToast("Situation room selected");
+    return;
+  }
+  if (name === "Live incidents") {
+    const incidents = data?.incidents || [];
+    modalTitle.textContent = "Live incidents";
+    modalSubtitle.textContent = "Reports requiring attention, sorted by urgency";
+    modalBody.innerHTML = incidents.length
+      ? `<div class="section-list">${incidents.map((incident) => `<button class="section-list-item" data-section-incident="${escapeHtml(incident.id)}"><span><strong>${escapeHtml(incident.title)}</strong><small>${escapeHtml(incident.location)} · ${escapeHtml(incident.status)}</small></span><b>${escapeHtml(incident.severity)}</b></button>`).join("")}</div>`
+      : `<p class="empty-state">No active incidents are available.</p>`;
+    modalBackdrop.classList.add("open");
+    modalBody.querySelectorAll("[data-section-incident]").forEach((button) => button.addEventListener("click", () => {
+      const incident = incidents.find((item) => item.id === button.dataset.sectionIncident);
+      if (incident) openModal(incident.title, "Incident details", [["Location", incident.location], ["Severity", incident.severity], ["Status", incident.status], ["Reported", incident.age || "Recently"]], "");
+    }));
+    document.getElementById("modalClose").focus();
+    return;
+  }
+  const views = {
+    "Shelters & capacity": {
+      subtitle: "Current evacuation support information",
+      rows: [["Open shelters", "8 locations"], ["Beds available", "1,280"], ["Current occupancy", `${data?.metrics?.shelterCapacity ?? 72}%`], ["Public guidance", "Move to the nearest marked shelter if authorities advise evacuation"]]
+    },
+    Resources: {
+      subtitle: "Rescue, medical, and utility deployment",
+      rows: (data?.teams || []).map((team) => [team.name, `${team.status} · ${team.eta} · ${team.assignment || "Available"}`])
+    },
+    "Public alerts": {
+      subtitle: "Emergency communications for residents",
+      rows: data?.alert ? [["Active advisory", data.alert.title], ["Message", data.alert.message], ["Action", "Follow local authority instructions and avoid flooded roads"]] : [["Active advisories", "No active advisories"], ["Status", "Monitoring conditions"]]
+    }
+  };
+  const view = views[name];
+  if (view) openModal(name, view.subtitle, view.rows, "");
+};
 
 document.querySelectorAll(".map-controls button").forEach((control) => {
   control.addEventListener("click", () => {
@@ -264,20 +298,16 @@ document.querySelectorAll(".map-controls button").forEach((control) => {
     showToast(`${control.textContent} map layer enabled`);
   });
 
-  document.getElementById("guideButton").addEventListener("click", () => {
-    openModal(
-      "How Aegis works",
-      "A simple guide to reading this response dashboard",
-      [
-        ["Active incidents", "Reports that still need coordination"],
-        ["People at risk", "Estimated residents affected across reported zones"],
-        ["Shelter capacity", "Available beds compared with total shelter capacity"],
-        ["Response readiness", "Teams currently checked in and ready to deploy"],
-        ["Map colors", "Red is critical, orange is high priority, blue marks lower-risk or support locations"]
-      ],
-      ""
-    );
-  });
+});
+
+document.getElementById("guideButton").addEventListener("click", () => {
+  openModal("How Aegis works", "A simple guide to reading this response dashboard", [
+    ["Active incidents", "Reports that still need coordination"],
+    ["People at risk", "Estimated residents affected across reported zones"],
+    ["Shelter capacity", "Available beds compared with total shelter capacity"],
+    ["Response readiness", "Teams currently checked in and ready to deploy"],
+    ["Map colors", "Red is critical, orange is high priority, blue marks lower-risk or support locations"]
+  ], "");
 });
 
 document.getElementById("dismissAlert").addEventListener("click", (event) => {
