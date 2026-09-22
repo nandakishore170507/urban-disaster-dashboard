@@ -6,8 +6,24 @@ const modalBody = document.getElementById("modalBody");
 const incidentPhotoUrls = new Map();
 let worldMap;
 const mapMarkers = [];
+const mapMarkersByIncidentId = new Map();
 let lastFocusedElement;
 let dashboardData;
+const placeDirectory = [
+  { name: "Delhi", country: "India", symbol: "🇮🇳", latitude: 28.6139, longitude: 77.2090 },
+  { name: "Dehradun", country: "India", symbol: "🇮🇳", latitude: 30.3165, longitude: 78.0322 },
+  { name: "Denver", country: "United States", symbol: "🇺🇸", latitude: 39.7392, longitude: -104.9903 },
+  { name: "Detroit", country: "United States", symbol: "🇺🇸", latitude: 42.3314, longitude: -83.0458 },
+  { name: "Dubai", country: "United Arab Emirates", symbol: "🇦🇪", latitude: 25.2048, longitude: 55.2708 },
+  { name: "Doha", country: "Qatar", symbol: "🇶🇦", latitude: 25.2854, longitude: 51.5310 },
+  { name: "Kochi", country: "India", symbol: "🇮🇳", latitude: 9.9312, longitude: 76.2673 },
+  { name: "Kaloor", country: "India", symbol: "🇮🇳", latitude: 10.0014, longitude: 76.2999 },
+  { name: "Palarivattom", country: "India", symbol: "🇮🇳", latitude: 9.9972, longitude: 76.3071 },
+  { name: "Edappally", country: "India", symbol: "🇮🇳", latitude: 10.0261, longitude: 76.3086 },
+  { name: "Hyderabad", country: "India", symbol: "🇮🇳", latitude: 17.3850, longitude: 78.4867 },
+  { name: "Madeira", country: "Portugal", symbol: "🇵🇹", latitude: 32.7607, longitude: -16.9595 },
+  { name: "Adelaide", country: "Australia", symbol: "🇦🇺", latitude: -34.9285, longitude: 138.6007 }
+];
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
@@ -122,6 +138,7 @@ const renderWorldMap = (incidents) => {
     }).addTo(worldMap);
   }
   mapMarkers.splice(0).forEach((marker) => marker.remove());
+  mapMarkersByIncidentId.clear();
   const locatedIncidents = incidents.filter((incident) => Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude));
   locatedIncidents.forEach((incident) => {
     const color = incident.severity === "Critical" ? "#e9655e" : incident.severity === "High" ? "#eca04c" : "#5796e2";
@@ -134,11 +151,27 @@ const renderWorldMap = (incidents) => {
     }).addTo(worldMap);
     marker.bindPopup(`<strong>${escapeHtml(incident.title)}</strong><br>${escapeHtml(incident.location)}<br>${escapeHtml(incident.severity)}`);
     mapMarkers.push(marker);
+    mapMarkersByIncidentId.set(incident.id, marker);
   });
   if (locatedIncidents.length > 1) {
     worldMap.fitBounds(L.featureGroup(mapMarkers).getBounds().pad(0.25), { maxZoom: 12 });
   }
   window.setTimeout(() => worldMap.invalidateSize(), 0);
+};
+
+const focusIncidentOnMap = (incident) => {
+  if (!incident || !worldMap) return;
+  const marker = mapMarkersByIncidentId.get(incident.id);
+  if (marker) {
+    worldMap.setView(marker.getLatLng(), 12, { animate: true });
+    marker.openPopup();
+    return;
+  }
+  if (Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)) {
+    worldMap.setView([incident.latitude, incident.longitude], 12, { animate: true });
+  } else {
+    showToast("Map coordinates are not available for this incident.");
+  }
 };
 
 const bindIncidentSelection = () => {
@@ -187,7 +220,7 @@ const openReportForm = () => {
   modalSubtitle.textContent = "Send a field report to the command center";
   modalBody.innerHTML = `<form class="report-form" id="reportForm">
     <label>Incident type<input name="title" required placeholder="e.g. Flooded road"></label>
-    <label>Location<input name="location" required placeholder="Area, ward, or landmark"></label>
+    <label>Location<input name="location" id="locationInput" required autocomplete="off" placeholder="Area, ward, or landmark"><div class="location-suggestions" id="locationSuggestions"></div></label>
     <div class="coordinate-fields"><label>Latitude<input name="latitude" type="number" min="-90" max="90" step="any" placeholder="e.g. 9.9312"></label><label>Longitude<input name="longitude" type="number" min="-180" max="180" step="any" placeholder="e.g. 76.2673"></label></div>
     <label>Severity<select name="severity"><option>Medium</option><option>High</option><option>Critical</option></select></label>
     <label>Description<textarea name="description" required rows="4" placeholder="What is happening? Who needs help?"></textarea></label>
@@ -195,7 +228,46 @@ const openReportForm = () => {
     <button class="modal-action" type="submit">Submit report →</button>
   </form>`;
   modalBackdrop.classList.add("open");
-  document.getElementById("reportForm").addEventListener("submit", async (event) => {
+  const reportForm = document.getElementById("reportForm");
+  const locationInput = document.getElementById("locationInput");
+  const suggestions = document.getElementById("locationSuggestions");
+  const latitudeInput = reportForm.querySelector('input[name="latitude"]');
+  const longitudeInput = reportForm.querySelector('input[name="longitude"]');
+  const buildMatches = (query) => {
+    const value = query.trim().toLowerCase();
+    if (!value) return [];
+    const startsWith = [];
+    const contains = [];
+    placeDirectory.forEach((place) => {
+      const fullName = `${place.name} ${place.country}`.toLowerCase();
+      if (fullName.startsWith(value)) startsWith.push(place);
+      else if (fullName.includes(value)) contains.push(place);
+    });
+    return [...startsWith, ...contains].slice(0, 8);
+  };
+  const clearSuggestions = () => { suggestions.innerHTML = ""; };
+  const selectPlace = (place) => {
+    locationInput.value = `${place.name}, ${place.country}`;
+    latitudeInput.value = String(place.latitude);
+    longitudeInput.value = String(place.longitude);
+    clearSuggestions();
+  };
+  locationInput.addEventListener("input", () => {
+    const matches = buildMatches(locationInput.value);
+    if (!matches.length) {
+      clearSuggestions();
+      return;
+    }
+    suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-name="${escapeHtml(place.name)}" data-place-country="${escapeHtml(place.country)}">${escapeHtml(`${place.name}, ${place.country}`)} <span>${place.symbol}</span></button>`).join("");
+    suggestions.querySelectorAll(".location-suggestion").forEach((button) => button.addEventListener("click", () => {
+      const place = placeDirectory.find((item) => item.name === button.dataset.placeName && item.country === button.dataset.placeCountry);
+      if (place) selectPlace(place);
+    }));
+  });
+  locationInput.addEventListener("blur", () => {
+    window.setTimeout(clearSuggestions, 120);
+  });
+  reportForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const submitButton = event.currentTarget.querySelector('button[type="submit"]');
@@ -268,7 +340,10 @@ const openNavigationView = (name) => {
     modalBackdrop.classList.add("open");
     modalBody.querySelectorAll("[data-section-incident]").forEach((button) => button.addEventListener("click", () => {
       const incident = incidents.find((item) => item.id === button.dataset.sectionIncident);
-      if (incident) openModal(incident.title, "Incident details", [["Location", incident.location], ["Severity", incident.severity], ["Status", incident.status], ["Reported", incident.age || "Recently"]], "");
+      if (incident) {
+        focusIncidentOnMap(incident);
+        openModal(incident.title, "Incident details", [["Location", incident.location], ["Severity", incident.severity], ["Status", incident.status], ["Reported", incident.age || "Recently"]], "");
+      }
     }));
     document.getElementById("modalClose").focus();
     return;

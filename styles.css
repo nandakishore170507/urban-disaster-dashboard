@@ -33,3 +33,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .toast{max-width:min(360px,calc(100vw - 30px));z-index:40}
 .modal{overscroll-behavior:contain}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}.guide-button:hover,.export-button:hover,.icon-button:hover,.report-button:hover,.more:hover,.modal-close:hover{transform:none}}
+.location-suggestions{display:grid;gap:6px;margin-top:8px}
+.location-suggestion{display:flex;justify-content:space-between;align-items:center;border:1px solid #e3eaef;background:#fff;border-radius:6px;padding:8px 10px;font:500 11px "DM Sans";color:#274054;cursor:pointer;text-align:left}
+.location-suggestion:hover{background:#edf8f5;border-color:#bce8db}
