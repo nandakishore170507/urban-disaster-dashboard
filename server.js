@@ -64,6 +64,61 @@ const sendAuthConfig = (res) => sendJson(res, 200, {
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY || null
 });
 
+const countryCodeToFlag = (countryCode) => {
+  if (!/^[a-z]{2}$/i.test(countryCode || "")) return "🌍";
+  return countryCode.toUpperCase().replace(/./g, (character) => String.fromCodePoint(127397 + character.charCodeAt(0)));
+};
+
+const getPlaceSuggestions = async (query) => {
+  const value = String(query || "").trim();
+  if (value.length < 2) return [];
+  if (typeof fetch !== "function") throw Object.assign(new Error("Place suggestions are unavailable on this runtime."), { statusCode: 503 });
+  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=25&q=${encodeURIComponent(value)}`;
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      headers: {
+        "User-Agent": "AegisUrbanDashboard/1.0",
+        "Accept-Language": "en"
+      }
+    });
+  } catch {
+    throw Object.assign(new Error("Place suggestions are temporarily unavailable."), { statusCode: 503 });
+  }
+  if (!response.ok) throw Object.assign(new Error("Place suggestions are temporarily unavailable."), { statusCode: 503 });
+  const payload = await response.json();
+  const searchValue = value.toLowerCase();
+  const seen = new Set();
+  return payload
+    .map((item) => {
+      const address = item.address || {};
+      const country = address.country || "";
+      const state = address.state || address.region || address.state_district || address.county || "";
+      const name = address.city || address.town || address.village || address.municipality || address.hamlet || address.suburb || address.county || address.state || address.country || item.name || item.display_name?.split(",")[0] || "";
+      const labelParts = [name, state, country].filter((part, index, array) => part && array.indexOf(part) === index);
+      const label = labelParts.join(", ");
+      if (!label || seen.has(label.toLowerCase())) return null;
+      seen.add(label.toLowerCase());
+      const text = `${name} ${state} ${country}`.toLowerCase();
+      const rank = text.startsWith(searchValue) || name.toLowerCase().startsWith(searchValue) ? 0 : text.includes(searchValue) ? 1 : 2;
+      return {
+        name,
+        state: state || null,
+        country: country || null,
+        label,
+        symbol: countryCodeToFlag(address.country_code),
+        latitude: Number(item.lat),
+        longitude: Number(item.lon),
+        importance: Number(item.importance) || 0,
+        rank
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => (left.rank - right.rank) || (right.importance - left.importance))
+    .slice(0, 10)
+    .map(({ importance, rank, ...place }) => place);
+};
+
 const getUserCounts = async () => {
   if (!supabase) return { total: 0, citizens: 0, coordinators: 0 };
   const { data: users, error: usersError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -74,61 +129,6 @@ const getUserCounts = async () => {
     total: users.users.length,
     citizens: profiles.filter((profile) => profile.role === "citizen").length,
     coordinators: profiles.filter((profile) => profile.role === "coordinator").length
-  };
-
-  const countryCodeToFlag = (countryCode) => {
-    if (!/^[a-z]{2}$/i.test(countryCode || "")) return "🌍";
-    return countryCode.toUpperCase().replace(/./g, (character) => String.fromCodePoint(127397 + character.charCodeAt(0)));
-  };
-
-  const getPlaceSuggestions = async (query) => {
-    const value = String(query || "").trim();
-    if (value.length < 2) return [];
-    if (typeof fetch !== "function") throw Object.assign(new Error("Place suggestions are unavailable on this runtime."), { statusCode: 503 });
-    const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=25&q=${encodeURIComponent(value)}`;
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        headers: {
-          "User-Agent": "AegisUrbanDashboard/1.0",
-          "Accept-Language": "en"
-        }
-      });
-    } catch {
-      throw Object.assign(new Error("Place suggestions are temporarily unavailable."), { statusCode: 503 });
-    }
-    if (!response.ok) throw Object.assign(new Error("Place suggestions are temporarily unavailable."), { statusCode: 503 });
-    const payload = await response.json();
-    const searchValue = value.toLowerCase();
-    const seen = new Set();
-    return payload
-      .map((item) => {
-        const address = item.address || {};
-        const country = address.country || "";
-        const state = address.state || address.region || address.state_district || address.county || "";
-        const name = address.city || address.town || address.village || address.municipality || address.hamlet || address.suburb || address.county || address.state || address.country || item.name || item.display_name?.split(",")[0] || "";
-        const labelParts = [name, state, country].filter((part, index, array) => part && array.indexOf(part) === index);
-        const label = labelParts.join(", ");
-        if (!label || seen.has(label.toLowerCase())) return null;
-        seen.add(label.toLowerCase());
-        const text = `${name} ${state} ${country}`.toLowerCase();
-        const rank = text.startsWith(searchValue) || name.toLowerCase().startsWith(searchValue) ? 0 : text.includes(searchValue) ? 1 : 2;
-        return {
-          name,
-          state: state || null,
-          country: country || null,
-          label,
-          symbol: countryCodeToFlag(address.country_code),
-          latitude: Number(item.lat),
-          longitude: Number(item.lon),
-          importance: Number(item.importance) || 0,
-          rank
-        };
-      })
-      .filter(Boolean)
-      .sort((left, right) => (left.rank - right.rank) || (right.importance - left.importance))
-      .slice(0, 10)
-      .map(({ importance, rank, ...place }) => place);
   };
 };
 
