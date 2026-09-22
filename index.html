@@ -12,24 +12,6 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <section class="auth-screen" id="authScreen">
-      <div class="auth-card">
-        <div class="brand auth-brand"><div class="brand-mark">✦</div><div><strong>AEGIS</strong><span>Urban resilience command</span></div></div>
-        <div class="eyebrow">SECURE ACCESS</div>
-        <h1 id="authTitle">Welcome to Aegis</h1>
-        <p id="authSubtitle">Sign in to report incidents or coordinate emergency response.</p>
-        <form id="authForm" class="auth-form">
-          <label class="signup-only">Full name<input name="fullName" autocomplete="name" placeholder="Your name"></label>
-          <label class="signup-only">Phone number<input name="phone" type="tel" autocomplete="tel" placeholder="+91 98765 43210"></label>
-          <label>Email<input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
-          <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="At least 6 characters"></label>
-          <fieldset class="role-field signup-only"><legend>I am joining as</legend><label><input type="radio" name="role" value="citizen" checked> Citizen</label><label><input type="radio" name="role" value="coordinator"> Coordinator</label></fieldset>
-          <button class="modal-action" type="submit" id="authSubmit">Sign in →</button>
-        </form>
-        <p class="auth-switch"><span id="authSwitchText">New to Aegis?</span> <button type="button" id="authSwitch">Create an account</button></p>
-        <p class="auth-error" id="authError" role="alert"></p>
-      </div>
-    </section>
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
@@ -121,7 +103,6 @@
       </div>
       <div class="toast" id="toast"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
