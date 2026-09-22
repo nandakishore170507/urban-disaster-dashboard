@@ -9,21 +9,6 @@ const mapMarkers = [];
 const mapMarkersByIncidentId = new Map();
 let lastFocusedElement;
 let dashboardData;
-const placeDirectory = [
-  { name: "Delhi", country: "India", symbol: "🇮🇳", latitude: 28.6139, longitude: 77.2090 },
-  { name: "Dehradun", country: "India", symbol: "🇮🇳", latitude: 30.3165, longitude: 78.0322 },
-  { name: "Denver", country: "United States", symbol: "🇺🇸", latitude: 39.7392, longitude: -104.9903 },
-  { name: "Detroit", country: "United States", symbol: "🇺🇸", latitude: 42.3314, longitude: -83.0458 },
-  { name: "Dubai", country: "United Arab Emirates", symbol: "🇦🇪", latitude: 25.2048, longitude: 55.2708 },
-  { name: "Doha", country: "Qatar", symbol: "🇶🇦", latitude: 25.2854, longitude: 51.5310 },
-  { name: "Kochi", country: "India", symbol: "🇮🇳", latitude: 9.9312, longitude: 76.2673 },
-  { name: "Kaloor", country: "India", symbol: "🇮🇳", latitude: 10.0014, longitude: 76.2999 },
-  { name: "Palarivattom", country: "India", symbol: "🇮🇳", latitude: 9.9972, longitude: 76.3071 },
-  { name: "Edappally", country: "India", symbol: "🇮🇳", latitude: 10.0261, longitude: 76.3086 },
-  { name: "Hyderabad", country: "India", symbol: "🇮🇳", latitude: 17.3850, longitude: 78.4867 },
-  { name: "Madeira", country: "Portugal", symbol: "🇵🇹", latitude: 32.7607, longitude: -16.9595 },
-  { name: "Adelaide", country: "Australia", symbol: "🇦🇺", latitude: -34.9285, longitude: 138.6007 }
-];
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
@@ -233,38 +218,44 @@ const openReportForm = () => {
   const suggestions = document.getElementById("locationSuggestions");
   const latitudeInput = reportForm.querySelector('input[name="latitude"]');
   const longitudeInput = reportForm.querySelector('input[name="longitude"]');
-  const buildMatches = (query) => {
-    const value = query.trim().toLowerCase();
-    if (!value) return [];
-    const startsWith = [];
-    const contains = [];
-    placeDirectory.forEach((place) => {
-      const fullName = `${place.name} ${place.country}`.toLowerCase();
-      if (fullName.startsWith(value)) startsWith.push(place);
-      else if (fullName.includes(value)) contains.push(place);
-    });
-    return [...startsWith, ...contains].slice(0, 8);
-  };
+  let suggestionTimer;
+  let requestId = 0;
   const clearSuggestions = () => { suggestions.innerHTML = ""; };
-  const selectPlace = (place) => {
-    locationInput.value = `${place.name}, ${place.country}`;
-    latitudeInput.value = String(place.latitude);
-    longitudeInput.value = String(place.longitude);
+  const selectPlace = (button) => {
+    locationInput.value = button.dataset.placeLabel || "";
+    latitudeInput.value = button.dataset.placeLat || "";
+    longitudeInput.value = button.dataset.placeLon || "";
     clearSuggestions();
   };
   locationInput.addEventListener("input", () => {
-    const matches = buildMatches(locationInput.value);
-    if (!matches.length) {
+    const value = locationInput.value.trim();
+    window.clearTimeout(suggestionTimer);
+    if (value.length < 2) {
       clearSuggestions();
       return;
     }
-    suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-name="${escapeHtml(place.name)}" data-place-country="${escapeHtml(place.country)}">${escapeHtml(`${place.name}, ${place.country}`)} <span>${place.symbol}</span></button>`).join("");
-    suggestions.querySelectorAll(".location-suggestion").forEach((button) => button.addEventListener("click", () => {
-      const place = placeDirectory.find((item) => item.name === button.dataset.placeName && item.country === button.dataset.placeCountry);
-      if (place) selectPlace(place);
-    }));
+    suggestionTimer = window.setTimeout(async () => {
+      const currentRequestId = ++requestId;
+      try {
+        const result = await api(`/places?query=${encodeURIComponent(value)}`);
+        if (currentRequestId !== requestId) return;
+        const matches = Array.isArray(result.suggestions) ? result.suggestions : [];
+        if (!matches.length) {
+          clearSuggestions();
+          return;
+        }
+        suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}">${escapeHtml(place.label)} <span>${escapeHtml(place.symbol || "🌍")}</span></button>`).join("");
+        suggestions.querySelectorAll(".location-suggestion").forEach((button) => button.addEventListener("click", () => selectPlace(button)));
+      } catch {
+        if (currentRequestId === requestId) {
+          clearSuggestions();
+          showToast("Place suggestions are temporarily unavailable.");
+        }
+      }
+    }, 180);
   });
   locationInput.addEventListener("blur", () => {
+    window.clearTimeout(suggestionTimer);
     window.setTimeout(clearSuggestions, 120);
   });
   reportForm.addEventListener("submit", async (event) => {

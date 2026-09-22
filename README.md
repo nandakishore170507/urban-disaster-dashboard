@@ -18,6 +18,8 @@ Create a Storage bucket named `incident-photos` before submitting reports. The b
 
 The deployed dashboard is currently public and opens directly without a login screen. Supabase profile and email-authentication code remains available for a future protected version, but it is not required to view or use this public prototype.
 
+Location autocomplete in the report form now uses global geocoding suggestions (countries, states, and cities) through `/api/places`, with starts-with matches ranked before contains matches and country symbols shown in the suggestion list.
+
 If you already ran the schema, run it again after updates so the `dispatch_incident` transaction function is created. The function should only be callable by the backend service role.
 
 For the interactive map, run the updated schema once more so `incidents.latitude` and `incidents.longitude` are added. Reports may include coordinates; existing Kochi seed locations use built-in fallback coordinates.
