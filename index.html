@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#mainContent">Skip to dashboard</a>
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
@@ -39,16 +40,16 @@
         </div>
       </aside>
 
-      <main class="content">
+      <main class="content" id="mainContent">
         <header class="topbar">
           <div>
-            <div class="eyebrow"><span class="live-dot"></span> LIVE OPERATIONS · MON 14 OCT 2026</div>
+            <div class="eyebrow"><span class="live-dot"></span> LIVE OPERATIONS · <span id="currentDate">Loading…</span></div>
             <h1>Situation room</h1>
-            <p class="subtitle">Kochi metropolitan region <span>·</span> Monsoon response grid</p>
+            <p class="subtitle">Kochi metropolitan region <span>·</span> Monsoon response grid <span class="sync-status" id="lastUpdated">Updating…</span></p>
           </div>
           <div class="top-actions">
             <button class="icon-button" aria-label="Notifications">♢<span class="notification"></span></button>
-            <div class="top-actions"><button class="report-button" id="reportButton">+ Report incident</button><button class="export-button" id="exportButton">Export briefing <span>↗</span></button></div>
+            <div class="top-actions"><button class="guide-button" id="guideButton">How Aegis works</button><button class="report-button" id="reportButton">+ Report incident</button><button class="export-button" id="exportButton">Export briefing <span>↗</span></button></div>
           </div>
         </header>
 
@@ -101,7 +102,7 @@
           <div id="modalBody"></div>
         </section>
       </div>
-      <div class="toast" id="toast"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
   </body>

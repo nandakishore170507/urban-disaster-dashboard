@@ -6,6 +6,7 @@ const modalBody = document.getElementById("modalBody");
 const incidentPhotoUrls = new Map();
 let worldMap;
 const mapMarkers = [];
+let lastFocusedElement;
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
@@ -34,6 +35,26 @@ const showToast = (message) => {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2800);
 };
 
+const formatCurrentDate = () => new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric"
+}).format(new Date()).toUpperCase();
+
+const updateClock = () => {
+  const dateElement = document.getElementById("currentDate");
+  if (dateElement) dateElement.textContent = formatCurrentDate();
+};
+
+const markUpdated = () => {
+  const updatedElement = document.getElementById("lastUpdated");
+  if (updatedElement) updatedElement.textContent = `· Updated ${new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date())}`;
+};
+
 const readImageAsDataUrl = (file) => new Promise((resolve, reject) => {
   if (!file || !file.size) return resolve(null);
   const reader = new FileReader();
@@ -56,6 +77,7 @@ const readImageAsDataUrl = (file) => new Promise((resolve, reject) => {
 });
 
 const renderDashboard = (data) => {
+  markUpdated();
   const metricValues = document.querySelectorAll(".stat-card > strong");
   if (metricValues[0]) metricValues[0].textContent = data.metrics.activeIncidents;
   if (metricValues[1]) metricValues[1].textContent = Number(data.metrics.peopleAtRisk).toLocaleString();
@@ -145,10 +167,12 @@ const bindIncidentSelection = () => {
 };
 
 const openModal = (title, subtitle, rows, actionLabel) => {
+  lastFocusedElement = document.activeElement;
   modalTitle.textContent = title;
   modalSubtitle.textContent = subtitle;
   modalBody.innerHTML = `<div class="detail-list">${rows.map(([label, value]) => `<div class="detail-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div>${actionLabel ? `<button class="modal-action" id="modalAction">${escapeHtml(actionLabel)} →</button>` : ""}`;
   modalBackdrop.classList.add("open");
+  document.getElementById("modalClose").focus();
   const action = document.getElementById("modalAction");
   if (action) action.addEventListener("click", () => {
     modalBackdrop.classList.remove("open");
@@ -204,12 +228,16 @@ const openReportForm = () => {
 };
 
 document.getElementById("reportButton").addEventListener("click", openReportForm);
-document.getElementById("modalClose").addEventListener("click", () => modalBackdrop.classList.remove("open"));
+const closeModal = () => {
+  modalBackdrop.classList.remove("open");
+  if (lastFocusedElement instanceof HTMLElement) lastFocusedElement.focus();
+};
+document.getElementById("modalClose").addEventListener("click", closeModal);
 modalBackdrop.addEventListener("click", (event) => {
-  if (event.target === modalBackdrop) modalBackdrop.classList.remove("open");
+  if (event.target === modalBackdrop) closeModal();
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") modalBackdrop.classList.remove("open");
+  if (event.key === "Escape" && modalBackdrop.classList.contains("open")) closeModal();
 });
 
 document.querySelectorAll(".nav-item").forEach((item) => {
@@ -234,6 +262,21 @@ document.querySelectorAll(".map-controls button").forEach((control) => {
     document.querySelectorAll(".map-controls button").forEach((button) => button.classList.remove("selected"));
     control.classList.add("selected");
     showToast(`${control.textContent} map layer enabled`);
+  });
+
+  document.getElementById("guideButton").addEventListener("click", () => {
+    openModal(
+      "How Aegis works",
+      "A simple guide to reading this response dashboard",
+      [
+        ["Active incidents", "Reports that still need coordination"],
+        ["People at risk", "Estimated residents affected across reported zones"],
+        ["Shelter capacity", "Available beds compared with total shelter capacity"],
+        ["Response readiness", "Teams currently checked in and ready to deploy"],
+        ["Map colors", "Red is critical, orange is high priority, blue marks lower-risk or support locations"]
+      ],
+      ""
+    );
   });
 });
 
@@ -315,3 +358,5 @@ document.querySelectorAll(".map-pin").forEach((pin) => {
 });
 
 api("/dashboard").then(renderDashboard).catch((error) => showToast(error.message));
+updateClock();
+window.setInterval(updateClock, 60 * 1000);
