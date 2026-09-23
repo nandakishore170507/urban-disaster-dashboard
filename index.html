@@ -8,9 +8,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#mainContent">Skip to dashboard</a>
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
@@ -19,11 +21,11 @@
         </div>
         <div class="nav-label">Command center</div>
         <nav>
-          <button class="nav-item active"><span>◈</span> Situation room</button>
-          <button class="nav-item"><span>⌁</span> Live incidents <b>12</b></button>
-          <button class="nav-item"><span>⌂</span> Shelters & capacity</button>
-          <button class="nav-item"><span>◌</span> Resources</button>
-          <button class="nav-item"><span>▣</span> Public alerts</button>
+          <button class="nav-item active" data-view="Situation room"><span>◈</span> Situation room</button>
+          <button class="nav-item" data-view="Live incidents"><span>⌁</span> Live incidents <b>12</b></button>
+          <button class="nav-item" data-view="Shelters & capacity"><span>⌂</span> Shelters & capacity</button>
+          <button class="nav-item" data-view="Resources"><span>◌</span> Resources</button>
+          <button class="nav-item" data-view="Public alerts"><span>▣</span> Public alerts</button>
         </nav>
         <div class="sidebar-spacer"></div>
         <div class="system-card">
@@ -38,16 +40,16 @@
         </div>
       </aside>
 
-      <main class="content">
+      <main class="content" id="mainContent">
         <header class="topbar">
           <div>
-            <div class="eyebrow"><span class="live-dot"></span> LIVE OPERATIONS · MON 14 OCT 2026</div>
+            <div class="eyebrow"><span class="live-dot"></span> LIVE OPERATIONS · <span id="currentDate">Loading…</span></div>
             <h1>Situation room</h1>
-            <p class="subtitle">Kochi metropolitan region <span>·</span> Monsoon response grid</p>
+            <p class="subtitle">Kochi metropolitan region <span>·</span> Monsoon response grid <span class="sync-status" id="lastUpdated">Updating…</span></p>
           </div>
           <div class="top-actions">
-            <button class="icon-button" aria-label="Notifications">♢<span class="notification"></span></button>
-            <button class="export-button" id="exportButton">Export briefing <span>↗</span></button>
+            <button class="icon-button" id="notificationButton" aria-label="Open emergency notifications">♢<span class="notification"></span></button>
+            <div class="top-actions"><button class="guide-button" id="guideButton">How Aegis works</button><button class="report-button" id="reportButton">+ Report incident</button><button class="export-button" id="exportButton">Export briefing <span>↗</span></button></div>
           </div>
         </header>
 
@@ -68,18 +70,8 @@
           <article class="panel map-panel">
             <div class="panel-header"><div><h2>Risk intelligence map</h2><p>Rainfall, water level and field reports</p></div><div class="map-controls"><button class="selected">Risk</button><button>Rainfall</button><button>Resources</button></div></div>
             <div class="map">
-              <div class="map-grid"></div>
-              <div class="river"></div>
-              <div class="zone zone-one"><span>ZONE 01</span><b>LOW</b></div>
-              <div class="zone zone-two"><span>ZONE 02</span><b>HIGH</b></div>
-              <div class="zone zone-three"><span>ZONE 03</span><b>MEDIUM</b></div>
-              <div class="zone zone-four"><span>ZONE 04</span><b>HIGH</b></div>
-              <div class="map-label label-a">KADAVANTHRA</div><div class="map-label label-b">KALOOR</div><div class="map-label label-c">MARINE DRIVE</div>
-              <button class="map-pin pin-red" data-incident="Canal overflow · Palarivattom">!</button>
-              <button class="map-pin pin-orange" data-incident="Road blocked · Kaloor">!</button>
-              <button class="map-pin pin-blue" data-incident="Shelter · St. Mary's School">⌂</button>
+              <div id="worldMap" aria-label="Interactive world map showing disaster incidents"></div>
               <div class="map-legend"><span><i class="legend-dot red"></i> Critical</span><span><i class="legend-dot orange"></i> Watch</span><span><i class="legend-dot blue"></i> Shelter</span></div>
-              <div class="map-tooltip" id="mapTooltip"></div>
             </div>
           </article>
 
@@ -91,7 +83,7 @@
               <button class="incident"><span class="incident-marker orange">!</span><span class="incident-copy"><strong>Power outage</strong><small>Vyttila ward · 42 min ago</small></span><span class="severity high-text">High</span></button>
               <button class="incident"><span class="incident-marker yellow">!</span><span class="incident-copy"><strong>Medical evacuation</strong><small>Edappally · 1 hr ago</small></span><span class="severity medium-text">Medium</span></button>
             </div>
-            <div class="incident-footer"><span>12 active incidents</span><button id="dispatchButton">Dispatch team <span>→</span></button></div>
+            <div class="incident-footer"><span id="activeIncidentCount">Loading active incidents…</span><button id="dispatchButton">Dispatch team <span>→</span></button></div>
           </article>
         </section>
 
@@ -110,7 +102,8 @@
           <div id="modalBody"></div>
         </section>
       </div>
-      <div class="toast" id="toast"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
