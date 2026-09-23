@@ -244,7 +244,7 @@ const openReportForm = () => {
           clearSuggestions();
           return;
         }
-        suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}">${escapeHtml(place.label)} <span>${escapeHtml(place.symbol || "🌍")}</span></button>`).join("");
+        suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}"><span class="place-label"><span class="place-flag" aria-hidden="true">${escapeHtml(place.symbol || "🌍")}</span>${escapeHtml(place.label)}</span></button>`).join("");
         suggestions.querySelectorAll(".location-suggestion").forEach((button) => {
           button.addEventListener("pointerdown", (event) => {
             event.preventDefault();
@@ -428,8 +428,14 @@ document.getElementById("exportButton").addEventListener("click", () => {
   }).catch((error) => showToast(error.message));
 });
 
-document.querySelector(".icon-button").addEventListener("click", () => {
-  showToast("No new emergency notifications");
+document.getElementById("notificationButton").addEventListener("click", () => {
+  openModal("Emergency notifications", "Latest operational updates for the response network", [
+    ["Current advisory", dashboardData?.alert?.title || "No active advisory"],
+    ["Weather update", dashboardData?.alert?.message || "No new weather warnings"],
+    ["Response teams", `${dashboardData?.teams?.filter((team) => team.status !== "Standby").length || 0} teams currently deployed`],
+    ["Incident queue", `${dashboardData?.metrics?.activeIncidents || 0} active incidents require monitoring`],
+    ["Recommended action", "Review critical incidents on the map and dispatch a team when support is required"]
+  ], "");
 });
 
 document.querySelector(".profile").addEventListener("click", () => {
