@@ -94,6 +94,7 @@ const normalizePlaceResults = (payload, source, searchValue) => {
             country_code: properties.countrycode
           },
           name: properties.name,
+          placeType: properties.type || properties.osm_value,
           lat: latitude,
           lon: longitude
         };
@@ -106,6 +107,7 @@ const normalizePlaceResults = (payload, source, searchValue) => {
       const country = address.country || "";
       const state = address.state || address.region || address.state_district || address.county || "";
       const name = address.city || address.town || address.village || address.municipality || address.hamlet || address.suburb || address.county || address.state || address.country || item.name || item.display_name?.split(",")[0] || "";
+      const placeType = item.placeType || item.addresstype || item.type || "";
       const labelParts = [name, state, country].filter((part, index, array) => part && array.indexOf(part) === index);
       const label = labelParts.join(", ");
       if (!label || seen.has(label.toLowerCase())) return null;
@@ -117,6 +119,7 @@ const normalizePlaceResults = (payload, source, searchValue) => {
         state: state || null,
         country: country || null,
         label,
+        placeType: placeType || null,
         symbol: countryCodeToFlag(address.country_code),
         latitude: Number(item.lat),
         longitude: Number(item.lon),
@@ -126,7 +129,7 @@ const normalizePlaceResults = (payload, source, searchValue) => {
     })
     .filter((place) => place && Number.isFinite(place.latitude) && Number.isFinite(place.longitude))
     .sort((left, right) => (left.rank - right.rank) || (right.importance - left.importance))
-    .slice(0, 10)
+    .slice(0, 25)
     .map(({ importance, rank, ...place }) => place);
 };
 
@@ -136,7 +139,7 @@ const getPlaceSuggestions = async (query) => {
   if (typeof fetch !== "function") throw Object.assign(new Error("Place suggestions are unavailable on this runtime."), { statusCode: 503 });
   const searchValue = value.toLowerCase();
   try {
-    const payload = await fetchJson(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=25&q=${encodeURIComponent(value)}`, {
+    const payload = await fetchJson(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&namedetails=1&limit=50&q=${encodeURIComponent(value)}`, {
       headers: {
         "User-Agent": "AegisUrbanDashboard/1.0 (https://urban-disaster-dashboard.onrender.com)",
         "Accept-Language": "en"
@@ -146,7 +149,7 @@ const getPlaceSuggestions = async (query) => {
   } catch (nominatimError) {
     console.warn(`Nominatim place search failed: ${nominatimError.message}`);
     try {
-      const payload = await fetchJson(`https://photon.komoot.io/api/?limit=25&q=${encodeURIComponent(value)}`, {
+      const payload = await fetchJson(`https://photon.komoot.io/api/?limit=50&q=${encodeURIComponent(value)}`, {
         headers: { "User-Agent": "AegisUrbanDashboard/1.0 (https://urban-disaster-dashboard.onrender.com)" }
       });
       return { suggestions: normalizePlaceResults(payload, "photon", searchValue), provider: "photon" };

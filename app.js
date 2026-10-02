@@ -252,7 +252,7 @@ const openReportForm = () => {
           clearSuggestions();
           return;
         }
-        suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}"><span class="place-label"><span class="place-flag" aria-hidden="true">${escapeHtml(place.symbol || "🌍")}</span>${escapeHtml(place.label)}</span></button>`).join("");
+        suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}"><span class="place-label"><span class="place-flag" aria-hidden="true">${escapeHtml(place.symbol || "🌍")}</span>${escapeHtml(place.label)}</span>${place.placeType ? `<small>${escapeHtml(place.placeType)}</small>` : ""}</button>`).join("");
         suggestions.querySelectorAll(".location-suggestion").forEach((button) => {
           button.addEventListener("pointerdown", (event) => {
             event.preventDefault();

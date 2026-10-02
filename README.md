@@ -18,7 +18,9 @@ Create a Storage bucket named `incident-photos` before submitting reports. The b
 
 The deployed dashboard is currently public and opens directly without a login screen. Supabase profile and email-authentication code remains available for a future protected version, but it is not required to view or use this public prototype.
 
-Location autocomplete in the report form now uses global geocoding suggestions (countries, states, and cities) through `/api/places`, with starts-with matches ranked before contains matches and country symbols shown in the suggestion list.
+Location autocomplete in the report form uses global geocoding suggestions through `/api/places`, with starts-with matches ranked before contains matches, country symbols, and place-type labels such as village, town, or city. The endpoint requests up to 50 results from Nominatim and falls back to Photon when Nominatim is unavailable.
+
+Public geocoding services return ranked results, not an exhaustive list of every village worldwide. For guaranteed global coverage, import a GeoNames global dump into a searchable database and configure that index on the server; do not attempt to load the entire dump into the browser.
 
 If you already ran the schema, run it again after updates so the `dispatch_incident` transaction function is created. The function should only be callable by the backend service role.
 
