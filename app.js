@@ -9,6 +9,14 @@ const mapMarkers = [];
 const mapMarkersByIncidentId = new Map();
 let lastFocusedElement;
 let dashboardData;
+let allIncidents = [];
+let rainfallLayer;
+let currentLanguage = localStorage.getItem("aegis-language") || "en";
+const translations = {
+  en: { report: "+ Report incident", guide: "How Aegis works", incidents: "Priority incidents", analytics: "View incident analytics ↗" },
+  ml: { report: "+ സംഭവം റിപ്പോർട്ട്", guide: "Aegis എങ്ങനെ പ്രവർത്തിക്കുന്നു", incidents: "പ്രധാന സംഭവങ്ങൾ", analytics: "വിശകലനം കാണുക ↗" },
+  hi: { report: "+ घटना रिपोर्ट", guide: "Aegis कैसे काम करता है", incidents: "प्राथमिक घटनाएँ", analytics: "विश्लेषण देखें ↗" }
+};
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
@@ -78,8 +86,35 @@ const readImageAsDataUrl = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const getFilters = () => ({
+  severity: document.getElementById("severityFilter")?.value || "",
+  status: document.getElementById("statusFilter")?.value || "",
+  location: document.getElementById("locationFilter")?.value.trim().toLowerCase() || "",
+  date: document.getElementById("dateFilter")?.value || ""
+});
+
+const filteredIncidents = () => allIncidents.filter((incident) =>
+  (!getFilters().severity || incident.severity === getFilters().severity) &&
+  (!getFilters().status || incident.status === getFilters().status) &&
+  (!getFilters().location || incident.location.toLowerCase().includes(getFilters().location)) &&
+  (!getFilters().date || String(incident.createdAt || "").slice(0, 10) === getFilters().date)
+);
+
+const renderIncidentList = () => {
+  const incidentList = document.querySelector(".incident-list");
+  const incidents = filteredIncidents();
+  if (!incidentList) return;
+  incidentList.innerHTML = incidents.slice(0, 4).map((incident, index) => {
+    const severityClass = incident.severity.toLowerCase() === "critical" ? "critical-text" : incident.severity.toLowerCase() === "high" ? "high-text" : "medium-text";
+    const markerClass = incident.severity.toLowerCase() === "critical" ? "red" : incident.severity.toLowerCase() === "high" ? "orange" : "yellow";
+    return `<button class="incident${index === 0 ? " active-incident" : ""}" data-incident-id="${escapeHtml(incident.id)}"><span class="incident-marker ${markerClass}">!</span><span class="incident-copy"><strong>${escapeHtml(incident.title)}</strong><small>${escapeHtml(incident.location)} · ${escapeHtml(incident.age)}</small></span><span class="severity ${severityClass}">${escapeHtml(incident.severity)}</span></button>`;
+  }).join("") || `<p class="empty-state">No incidents match these filters.</p>`;
+  bindIncidentSelection();
+};
+
 const renderDashboard = (data) => {
   dashboardData = data;
+  allIncidents = data.incidents || [];
   markUpdated();
   const metricValues = document.querySelectorAll(".stat-card > strong");
   if (metricValues[0]) metricValues[0].textContent = data.metrics.activeIncidents;
@@ -90,16 +125,8 @@ const renderDashboard = (data) => {
   if (activeIncidentCount) activeIncidentCount.textContent = `${data.metrics.activeIncidents} active incidents`;
   const incidentBadge = document.querySelector(".nav-item:nth-child(2) b");
   if (incidentBadge) incidentBadge.textContent = data.metrics.activeIncidents;
-  const incidentList = document.querySelector(".incident-list");
-  if (incidentList && data.incidents.length) {
-    incidentList.innerHTML = data.incidents.slice(0, 4).map((incident, index) => {
-      if (incident.photoUrl) incidentPhotoUrls.set(incident.id, incident.photoUrl);
-      const severityClass = incident.severity.toLowerCase() === "critical" ? "critical-text" : incident.severity.toLowerCase() === "high" ? "high-text" : "medium-text";
-      const markerClass = incident.severity.toLowerCase() === "critical" ? "red" : incident.severity.toLowerCase() === "high" ? "orange" : "yellow";
-      return `<button class="incident${index === 0 ? " active-incident" : ""}" data-incident-id="${escapeHtml(incident.id)}"><span class="incident-marker ${markerClass}">!</span><span class="incident-copy"><strong>${escapeHtml(incident.title)}</strong><small>${escapeHtml(incident.location)} · ${escapeHtml(incident.age)}</small></span><span class="severity ${severityClass}">${escapeHtml(incident.severity)}</span></button>`;
-    }).join("");
-    bindIncidentSelection();
-  }
+  data.incidents.forEach((incident) => { if (incident.photoUrl) incidentPhotoUrls.set(incident.id, incident.photoUrl); });
+  renderIncidentList();
   renderWorldMap(data.incidents);
   const teamRows = document.querySelector(".table-panel tbody");
   if (teamRows) {
@@ -159,34 +186,58 @@ const focusIncidentOnMap = (incident) => {
   }
 };
 
+const openIncidentDetails = async (incidentId) => {
+  try {
+    const details = await api(`/incidents/${encodeURIComponent(incidentId)}`);
+    const incident = details.incident;
+    const history = details.history || [];
+    openModal(incident.title, `Tracking ID ${incident.trackingId || "pending"}`, [
+      ["Location", incident.location],
+      ["Severity", incident.severity],
+      ["Status", incident.status],
+      ["Description", incident.description || "No description provided"],
+      ["Assigned team", details.assignment?.name || "Unassigned"],
+      ["ETA", details.assignment?.eta || "Awaiting dispatch"]
+    ], incident.status === "Resolved" ? "" : "Mark resolved", incident.status === "Resolved" ? null : async () => {
+      await api(`/incidents/${encodeURIComponent(incident.id)}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Resolved" })
+      });
+      closeModal();
+      await api("/dashboard").then(renderDashboard);
+      showToast("Incident marked resolved");
+    });
+    const timeline = document.createElement("div");
+    timeline.className = "timeline";
+    timeline.innerHTML = `<h3>Response timeline</h3>${history.map((entry) => `<div class="timeline-item"><b>${escapeHtml(entry.status)}</b><span>${escapeHtml(entry.note || "")}</span><small>${new Date(entry.createdAt).toLocaleString()}</small></div>`).join("") || `<p class="empty-state">No timeline events yet.</p>`}`;
+    modalBody.append(timeline);
+  } catch (error) {
+    if (!navigator.onLine) {
+      const queuedReports = JSON.parse(localStorage.getItem("aegis-offline-reports") || "[]");
+      queuedReports.push(Object.fromEntries(form.entries()));
+      localStorage.setItem("aegis-offline-reports", JSON.stringify(queuedReports));
+      showToast("No connection. Report saved and will send when you are online.");
+      modalBackdrop.classList.remove("open");
+      return;
+    }
+    showToast(error.message);
+  }
+};
+
 const bindIncidentSelection = () => {
   document.querySelectorAll(".incident").forEach((incident) => {
     incident.addEventListener("click", () => {
       document.querySelectorAll(".incident").forEach((item) => item.classList.remove("active-incident"));
       incident.classList.add("active-incident");
-      const photoUrl = incidentPhotoUrls.get(incident.dataset.incidentId);
-      if (photoUrl) {
-        openModal(
-          incident.querySelector("strong").textContent,
-          "Incident evidence",
-          [["Location", incident.querySelector("small").textContent], ["Severity", incident.querySelector(".severity").textContent]],
-          ""
-        );
-        const photoLink = document.createElement("a");
-        photoLink.className = "modal-action";
-        photoLink.href = photoUrl;
-        photoLink.target = "_blank";
-        photoLink.rel = "noopener";
-        photoLink.textContent = "View saved photo →";
-        modalBody.append(photoLink);
-      } else {
-        showToast(`${incident.querySelector("strong").textContent} selected for response coordination`);
-      }
+      const selected = allIncidents.find((item) => item.id === incident.dataset.incidentId);
+      focusIncidentOnMap(selected);
+      openIncidentDetails(incident.dataset.incidentId);
     });
   });
 };
 
-const openModal = (title, subtitle, rows, actionLabel) => {
+const openModal = (title, subtitle, rows, actionLabel, actionHandler) => {
   lastFocusedElement = document.activeElement;
   modalTitle.textContent = title;
   modalSubtitle.textContent = subtitle;
@@ -195,7 +246,15 @@ const openModal = (title, subtitle, rows, actionLabel) => {
   document.getElementById("modalClose").focus();
   const action = document.getElementById("modalAction");
   if (action) action.addEventListener("click", () => {
-    modalBackdrop.classList.remove("open");
+    if (actionHandler) {
+      action.disabled = true;
+      actionHandler(action).catch((error) => {
+        action.disabled = false;
+        showToast(error.message);
+      });
+      return;
+    }
+    closeModal();
     showToast(`${actionLabel} completed`);
   });
 };
@@ -244,7 +303,7 @@ const openReportForm = () => {
           clearSuggestions();
           return;
         }
-        suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}"><span class="place-label"><span class="place-flag" aria-hidden="true">${escapeHtml(place.symbol || "🌍")}</span>${escapeHtml(place.label)}</span></button>`).join("");
+        suggestions.innerHTML = matches.map((place) => `<button type="button" class="location-suggestion" data-place-label="${escapeHtml(place.label)}" data-place-lat="${escapeHtml(place.latitude)}" data-place-lon="${escapeHtml(place.longitude)}"><span class="place-label"><span class="place-flag" aria-hidden="true">${escapeHtml(place.symbol || "🌍")}</span>${escapeHtml(place.label)}</span>${place.placeType ? `<small>${escapeHtml(place.placeType)}</small>` : ""}</button>`).join("");
         suggestions.querySelectorAll(".location-suggestion").forEach((button) => {
           button.addEventListener("pointerdown", (event) => {
             event.preventDefault();
@@ -307,6 +366,25 @@ const openReportForm = () => {
 };
 
 document.getElementById("reportButton").addEventListener("click", openReportForm);
+const flushOfflineReports = async () => {
+  const queuedReports = JSON.parse(localStorage.getItem("aegis-offline-reports") || "[]");
+  if (!queuedReports.length || !navigator.onLine) return;
+  const remaining = [];
+  for (const report of queuedReports) {
+    try {
+      await api("/incidents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
+    } catch {
+      remaining.push(report);
+    }
+  }
+  localStorage.setItem("aegis-offline-reports", JSON.stringify(remaining));
+  if (queuedReports.length !== remaining.length) {
+    showToast(`${queuedReports.length - remaining.length} offline report(s) submitted`);
+    api("/dashboard").then(renderDashboard);
+  }
+};
+window.addEventListener("online", flushOfflineReports);
+window.setTimeout(flushOfflineReports, 1000);
 const closeModal = () => {
   modalBackdrop.classList.remove("open");
   if (lastFocusedElement instanceof HTMLElement) lastFocusedElement.focus();
@@ -325,6 +403,58 @@ document.querySelectorAll(".nav-item").forEach((item) => {
     item.classList.add("active");
     openNavigationView(item.dataset.view);
   });
+
+  ["severityFilter", "statusFilter", "locationFilter", "dateFilter"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", renderIncidentList);
+    document.getElementById(id)?.addEventListener("change", renderIncidentList);
+  });
+
+  const addRainfallLayer = () => {
+    if (!worldMap || rainfallLayer) return;
+    rainfallLayer = L.layerGroup([
+      L.circle([9.99, 76.31], { radius: 8500, color: "#4b8ee8", fillColor: "#4b8ee8", fillOpacity: 0.2, weight: 1 }).bindPopup("Heavy rainfall watch · Zone 2"),
+      L.circle([9.96, 76.34], { radius: 6500, color: "#5796e2", fillColor: "#5796e2", fillOpacity: 0.18, weight: 1 }).bindPopup("Rainfall watch · Zone 4")
+    ]);
+  };
+
+  document.querySelectorAll(".map-controls button").forEach((control) => {
+    control.addEventListener("click", () => {
+      if (control.textContent.trim() === "Rainfall") {
+        addRainfallLayer();
+        rainfallLayer.addTo(worldMap);
+      } else if (rainfallLayer) {
+        worldMap.removeLayer(rainfallLayer);
+      }
+    });
+  });
+
+  document.getElementById("analyticsButton")?.addEventListener("click", async () => {
+    try {
+      const analytics = await api("/analytics");
+      openModal("Incident analytics", "Current response performance", [
+        ["Total incidents", analytics.total],
+        ["Critical", analytics.bySeverity.Critical || 0],
+        ["Resolved", analytics.byStatus.Resolved || 0],
+        ["Average response", `${analytics.averageResponseMinutes} minutes`]
+      ], "");
+    } catch (error) { showToast(error.message); }
+  });
+
+  document.getElementById("languageSelect")?.addEventListener("change", (event) => {
+    currentLanguage = event.target.value;
+    localStorage.setItem("aegis-language", currentLanguage);
+    const text = translations[currentLanguage] || translations.en;
+    document.getElementById("reportButton").textContent = text.report;
+    document.getElementById("guideButton").textContent = text.guide;
+    document.querySelector(".incident-panel h2").textContent = text.incidents;
+    document.getElementById("analyticsButton").textContent = text.analytics;
+  });
+  document.getElementById("languageSelect").value = currentLanguage;
+  document.getElementById("languageSelect").dispatchEvent(new Event("change"));
+
+  window.setInterval(() => {
+    if (!modalBackdrop.classList.contains("open") && document.visibilityState === "visible") api("/dashboard").then(renderDashboard).catch(() => {});
+  }, 30000);
 });
 
 const openNavigationView = (name) => {
@@ -347,7 +477,7 @@ const openNavigationView = (name) => {
       const incident = incidents.find((item) => item.id === button.dataset.sectionIncident);
       if (incident) {
         focusIncidentOnMap(incident);
-        openModal(incident.title, "Incident details", [["Location", incident.location], ["Severity", incident.severity], ["Status", incident.status], ["Reported", incident.age || "Recently"]], "");
+        openIncidentDetails(incident.id);
       }
     }));
     document.getElementById("modalClose").focus();
@@ -356,7 +486,7 @@ const openNavigationView = (name) => {
   const views = {
     "Shelters & capacity": {
       subtitle: "Current evacuation support information",
-      rows: [["Open shelters", "8 locations"], ["Beds available", "1,280"], ["Current occupancy", `${data?.metrics?.shelterCapacity ?? 72}%`], ["Public guidance", "Move to the nearest marked shelter if authorities advise evacuation"]]
+      rows: (data?.shelters || []).map((shelter) => [`${shelter.name} · ${shelter.status}`, `${shelter.available}/${shelter.capacity} beds · ${shelter.location}`])
     },
     Resources: {
       subtitle: "Rescue, medical, and utility deployment",
@@ -367,6 +497,35 @@ const openNavigationView = (name) => {
       rows: data?.alert ? [["Active advisory", data.alert.title], ["Message", data.alert.message], ["Action", "Follow local authority instructions and avoid flooded roads"]] : [["Active advisories", "No active advisories"], ["Status", "Monitoring conditions"]]
     }
   };
+  if (name === "Shelters & capacity") {
+    openModal(name, views[name].subtitle, views[name].rows, "");
+    const directions = document.createElement("div");
+    directions.className = "shelter-links";
+    (data?.shelters || []).forEach((shelter) => {
+      const link = document.createElement("a");
+      link.href = `https://www.google.com/maps/dir/?api=1&destination=${shelter.latitude},${shelter.longitude}`;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = `Directions to ${shelter.name} →`;
+      directions.append(link);
+    });
+    modalBody.append(directions);
+    return;
+  }
+  if (name === "Resources") {
+    openModal(name, views[name].subtitle, views[name].rows, "");
+    const auditButton = document.createElement("button");
+    auditButton.className = "modal-action";
+    auditButton.textContent = "View audit log →";
+    auditButton.addEventListener("click", async () => {
+      const result = await api("/audit");
+      modalTitle.textContent = "Admin audit log";
+      modalSubtitle.textContent = "Recent response actions";
+      modalBody.innerHTML = `<div class="timeline">${(result.logs || []).map((log) => `<div class="timeline-item"><b>${escapeHtml(log.action)}</b><span>${escapeHtml(log.details)}</span><small>${escapeHtml(log.created_at || log.createdAt || "")}</small></div>`).join("") || "<p class='empty-state'>No audit events yet.</p>"}</div>`;
+    });
+    modalBody.append(auditButton);
+    return;
+  }
   const view = views[name];
   if (view) openModal(name, view.subtitle, view.rows, "");
 };
@@ -390,13 +549,21 @@ document.getElementById("guideButton").addEventListener("click", () => {
   ], "");
 });
 
+const dismissAlert = async (actionButton) => {
+  if (actionButton) actionButton.disabled = true;
+  await api("/alerts/dismiss", { method: "POST" });
+  dashboardData = dashboardData ? { ...dashboardData, alert: null } : dashboardData;
+  document.querySelector(".alert-banner")?.remove();
+  document.querySelector(".notification")?.remove();
+  closeModal();
+  showToast("Monsoon advisory dismissed");
+};
+
 document.getElementById("dismissAlert").addEventListener("click", (event) => {
-  api("/alerts/dismiss", { method: "POST" })
-    .then(() => {
-      event.currentTarget.closest(".alert-banner").remove();
-      showToast("Monsoon advisory dismissed");
-    })
-    .catch((error) => showToast(error.message));
+  dismissAlert(event.currentTarget).catch((error) => {
+    event.currentTarget.disabled = false;
+    showToast(error.message);
+  });
 });
 
 document.getElementById("dispatchButton").addEventListener("click", () => {
@@ -416,16 +583,27 @@ document.getElementById("dispatchButton").addEventListener("click", () => {
 });
 
 document.getElementById("exportButton").addEventListener("click", () => {
-  api("/briefing").then((data) => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
+  openModal("Export reports", "Choose a format for the current incident data", [
+    ["CSV", "Spreadsheet-compatible incident report"],
+    ["PDF", "Print-ready report for saving as PDF"]
+  ], "Download CSV", async () => {
+    const rows = [["Tracking ID", "Title", "Location", "Severity", "Status", "Created"]];
+    allIncidents.forEach((incident) => rows.push([incident.trackingId, incident.title, incident.location, incident.severity, incident.status, incident.createdAt || ""]));
+    const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = data.filename || "aegis-briefing.json";
+    link.download = "aegis-incidents.csv";
     link.click();
     URL.revokeObjectURL(url);
-    showToast("Briefing downloaded");
-  }).catch((error) => showToast(error.message));
+    closeModal();
+    showToast("CSV report downloaded");
+  });
+  const pdfButton = document.createElement("button");
+  pdfButton.className = "modal-action secondary-action";
+  pdfButton.textContent = "Print / Save as PDF →";
+  pdfButton.addEventListener("click", () => window.print());
+  modalBody.append(pdfButton);
 });
 
 document.getElementById("notificationButton").addEventListener("click", () => {
@@ -435,7 +613,7 @@ document.getElementById("notificationButton").addEventListener("click", () => {
     ["Response teams", `${dashboardData?.teams?.filter((team) => team.status !== "Standby").length || 0} teams currently deployed`],
     ["Incident queue", `${dashboardData?.metrics?.activeIncidents || 0} active incidents require monitoring`],
     ["Recommended action", "Review critical incidents on the map and dispatch a team when support is required"]
-  ], "");
+  ], dashboardData?.alert ? "Dismiss advisory" : "", dashboardData?.alert ? dismissAlert : null);
 });
 
 document.querySelector(".profile").addEventListener("click", () => {
