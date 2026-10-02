@@ -69,27 +69,38 @@ const countryCodeToFlag = (countryCode) => {
   return countryCode.toUpperCase().replace(/./g, (character) => String.fromCodePoint(127397 + character.charCodeAt(0)));
 };
 
-const getPlaceSuggestions = async (query) => {
-  const value = String(query || "").trim();
-  if (value.length < 2) return [];
-  if (typeof fetch !== "function") throw Object.assign(new Error("Place suggestions are unavailable on this runtime."), { statusCode: 503 });
-  const endpoint = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=25&q=${encodeURIComponent(value)}`;
-  let response;
+const fetchJson = async (endpoint, options = {}) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7000);
   try {
-    response = await fetch(endpoint, {
-      headers: {
-        "User-Agent": "AegisUrbanDashboard/1.0",
-        "Accept-Language": "en"
-      }
-    });
-  } catch {
-    throw Object.assign(new Error("Place suggestions are temporarily unavailable."), { statusCode: 503 });
+    const response = await fetch(endpoint, { ...options, signal: controller.signal });
+    if (!response.ok) throw new Error(`Geocoder returned HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!response.ok) throw Object.assign(new Error("Place suggestions are temporarily unavailable."), { statusCode: 503 });
-  const payload = await response.json();
-  const searchValue = value.toLowerCase();
+};
+
+const normalizePlaceResults = (payload, source, searchValue) => {
+  const items = source === "photon"
+    ? (payload.features || []).map((feature) => {
+        const properties = feature.properties || {};
+        const [longitude, latitude] = feature.geometry?.coordinates || [];
+        return {
+          address: {
+            city: properties.city || properties.town || properties.village,
+            state: properties.state || properties.county,
+            country: properties.country,
+            country_code: properties.countrycode
+          },
+          name: properties.name,
+          lat: latitude,
+          lon: longitude
+        };
+      })
+    : payload;
   const seen = new Set();
-  return payload
+  return items
     .map((item) => {
       const address = item.address || {};
       const country = address.country || "";
@@ -113,10 +124,37 @@ const getPlaceSuggestions = async (query) => {
         rank
       };
     })
-    .filter(Boolean)
+    .filter((place) => place && Number.isFinite(place.latitude) && Number.isFinite(place.longitude))
     .sort((left, right) => (left.rank - right.rank) || (right.importance - left.importance))
     .slice(0, 10)
     .map(({ importance, rank, ...place }) => place);
+};
+
+const getPlaceSuggestions = async (query) => {
+  const value = String(query || "").trim();
+  if (value.length < 2) return [];
+  if (typeof fetch !== "function") throw Object.assign(new Error("Place suggestions are unavailable on this runtime."), { statusCode: 503 });
+  const searchValue = value.toLowerCase();
+  try {
+    const payload = await fetchJson(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=25&q=${encodeURIComponent(value)}`, {
+      headers: {
+        "User-Agent": "AegisUrbanDashboard/1.0 (https://urban-disaster-dashboard.onrender.com)",
+        "Accept-Language": "en"
+      }
+    });
+    return { suggestions: normalizePlaceResults(payload, "nominatim", searchValue), provider: "nominatim" };
+  } catch (nominatimError) {
+    console.warn(`Nominatim place search failed: ${nominatimError.message}`);
+    try {
+      const payload = await fetchJson(`https://photon.komoot.io/api/?limit=25&q=${encodeURIComponent(value)}`, {
+        headers: { "User-Agent": "AegisUrbanDashboard/1.0 (https://urban-disaster-dashboard.onrender.com)" }
+      });
+      return { suggestions: normalizePlaceResults(payload, "photon", searchValue), provider: "photon" };
+    } catch (photonError) {
+      console.error(`All place search providers failed: ${photonError.message}`);
+      throw Object.assign(new Error("Place suggestions are temporarily unavailable. Please enter the location manually."), { statusCode: 503 });
+    }
+  }
 };
 
 const getUserCounts = async () => {
@@ -346,7 +384,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/config" && req.method === "GET") return sendAuthConfig(res);
     if (url.pathname === "/api/places" && req.method === "GET") {
       const query = url.searchParams.get("query") || "";
-      return sendJson(res, 200, { suggestions: await getPlaceSuggestions(query) });
+      return sendJson(res, 200, await getPlaceSuggestions(query));
     }
     if (url.pathname === "/api/user-counts" && req.method === "GET") return sendJson(res, 200, await getUserCounts());
     if (url.pathname === "/api/dashboard" && req.method === "GET") return sendJson(res, 200, await dashboard());
