@@ -186,7 +186,7 @@ const bindIncidentSelection = () => {
   });
 };
 
-const openModal = (title, subtitle, rows, actionLabel) => {
+const openModal = (title, subtitle, rows, actionLabel, actionHandler) => {
   lastFocusedElement = document.activeElement;
   modalTitle.textContent = title;
   modalSubtitle.textContent = subtitle;
@@ -195,7 +195,15 @@ const openModal = (title, subtitle, rows, actionLabel) => {
   document.getElementById("modalClose").focus();
   const action = document.getElementById("modalAction");
   if (action) action.addEventListener("click", () => {
-    modalBackdrop.classList.remove("open");
+    if (actionHandler) {
+      action.disabled = true;
+      actionHandler(action).catch((error) => {
+        action.disabled = false;
+        showToast(error.message);
+      });
+      return;
+    }
+    closeModal();
     showToast(`${actionLabel} completed`);
   });
 };
@@ -390,13 +398,21 @@ document.getElementById("guideButton").addEventListener("click", () => {
   ], "");
 });
 
+const dismissAlert = async (actionButton) => {
+  if (actionButton) actionButton.disabled = true;
+  await api("/alerts/dismiss", { method: "POST" });
+  dashboardData = dashboardData ? { ...dashboardData, alert: null } : dashboardData;
+  document.querySelector(".alert-banner")?.remove();
+  document.querySelector(".notification")?.remove();
+  closeModal();
+  showToast("Monsoon advisory dismissed");
+};
+
 document.getElementById("dismissAlert").addEventListener("click", (event) => {
-  api("/alerts/dismiss", { method: "POST" })
-    .then(() => {
-      event.currentTarget.closest(".alert-banner").remove();
-      showToast("Monsoon advisory dismissed");
-    })
-    .catch((error) => showToast(error.message));
+  dismissAlert(event.currentTarget).catch((error) => {
+    event.currentTarget.disabled = false;
+    showToast(error.message);
+  });
 });
 
 document.getElementById("dispatchButton").addEventListener("click", () => {
@@ -435,7 +451,7 @@ document.getElementById("notificationButton").addEventListener("click", () => {
     ["Response teams", `${dashboardData?.teams?.filter((team) => team.status !== "Standby").length || 0} teams currently deployed`],
     ["Incident queue", `${dashboardData?.metrics?.activeIncidents || 0} active incidents require monitoring`],
     ["Recommended action", "Review critical incidents on the map and dispatch a team when support is required"]
-  ], "");
+  ], dashboardData?.alert ? "Dismiss advisory" : "", dashboardData?.alert ? dismissAlert : null);
 });
 
 document.querySelector(".profile").addEventListener("click", () => {
