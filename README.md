@@ -22,6 +22,8 @@ Location autocomplete in the report form uses global geocoding suggestions throu
 
 Public geocoding services return ranked results, not an exhaustive list of every village worldwide. For guaranteed global coverage, import a GeoNames global dump into a searchable database and configure that index on the server; do not attempt to load the entire dump into the browser.
 
+The dashboard also includes incident tracking IDs and response timelines, polling-based live refreshes, severity/status/date/location filters, shelter availability and directions, analytics, rainfall watch overlays, offline report queuing, English/Malayalam/Hindi labels, an audit-log view, and CSV/print-to-PDF exports. Run the updated `supabase/schema.sql` to create the history, shelter, and audit tables used by these features. Until then, demo shelter data remains available and older incident rows receive generated tracking IDs.
+
 If you already ran the schema, run it again after updates so the `dispatch_incident` transaction function is created. The function should only be callable by the backend service role.
 
 For the interactive map, run the updated schema once more so `incidents.latitude` and `incidents.longitude` are added. Reports may include coordinates; existing Kochi seed locations use built-in fallback coordinates.

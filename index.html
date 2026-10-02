@@ -49,7 +49,7 @@
           </div>
           <div class="top-actions">
             <button class="icon-button" id="notificationButton" aria-label="Open emergency notifications">♢<span class="notification"></span></button>
-            <div class="top-actions"><button class="guide-button" id="guideButton">How Aegis works</button><button class="report-button" id="reportButton">+ Report incident</button><button class="export-button" id="exportButton">Export briefing <span>↗</span></button></div>
+            <div class="top-actions"><select class="language-select" id="languageSelect" aria-label="Language"><option value="en">EN</option><option value="ml">മലയാളം</option><option value="hi">हिन्दी</option></select><button class="guide-button" id="guideButton">How Aegis works</button><button class="report-button" id="reportButton">+ Report incident</button><button class="export-button" id="exportButton">Export briefing <span>↗</span></button></div>
           </div>
         </header>
 
@@ -77,6 +77,7 @@
 
           <article class="panel incident-panel">
             <div class="panel-header"><div><h2>Priority incidents</h2><p>Sorted by response urgency</p></div><button class="more">View all ↗</button></div>
+            <div class="incident-filters"><select id="severityFilter"><option value="">All severity</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select><select id="statusFilter"><option value="">All status</option><option>Reported</option><option>Assigned</option><option>Responding</option><option>Resolved</option></select><input id="locationFilter" placeholder="Filter location"><input id="dateFilter" type="date" aria-label="Filter by date"></div>
             <div class="incident-list">
               <button class="incident active-incident"><span class="incident-marker red">!</span><span class="incident-copy"><strong>Canal overflow</strong><small>Palarivattom · 14 min ago</small></span><span class="severity critical-text">Critical</span></button>
               <button class="incident"><span class="incident-marker orange">!</span><span class="incident-copy"><strong>Road submerged</strong><small>Kaloor junction · 28 min ago</small></span><span class="severity high-text">High</span></button>
@@ -89,7 +90,7 @@
 
         <section class="bottom-grid">
           <article class="panel table-panel"><div class="panel-header"><div><h2>Field response teams</h2><p>Live deployment status</p></div><button class="more">Manage teams ↗</button></div><table><thead><tr><th>TEAM</th><th>ASSIGNMENT</th><th>STATUS</th><th>ETA</th></tr></thead><tbody><tr><td><span class="team-icon">↟</span> Alpha 01</td><td>Palarivattom overflow</td><td><span class="status active-status">● En route</span></td><td>06 min</td></tr><tr><td><span class="team-icon teal">◆</span> Medical 03</td><td>Edappally evacuation</td><td><span class="status active-status">● On site</span></td><td>—</td></tr><tr><td><span class="team-icon purple">✚</span> Utility 02</td><td>Vyttila power outage</td><td><span class="status waiting-status">● Standby</span></td><td>18 min</td></tr></tbody></table></article>
-          <article class="panel alert-panel"><div class="panel-header"><div><h2>Public alert reach</h2><p>Last 24 hours</p></div><span class="reach-total">84.2K <small>people</small></span></div><div class="reach-chart"><div class="chart-y"><span>40k</span><span>20k</span><span>0</span></div><div class="bars"><i style="height:42%"></i><i style="height:58%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:52%"></i><i style="height:88%"></i><i style="height:64%"></i><i style="height:94%"></i><i style="height:76%"></i><i style="height:100%"></i><i style="height:84%"></i><i style="height:92%"></i></div></div><div class="chart-labels"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span></div></article>
+          <article class="panel alert-panel"><div class="panel-header"><div><h2>Public alert reach</h2><p>Last 24 hours</p></div><span class="reach-total">84.2K <small>people</small></span></div><div class="reach-chart"><div class="chart-y"><span>40k</span><span>20k</span><span>0</span></div><div class="bars"><i style="height:42%"></i><i style="height:58%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:52%"></i><i style="height:88%"></i><i style="height:64%"></i><i style="height:94%"></i><i style="height:76%"></i><i style="height:100%"></i><i style="height:84%"></i><i style="height:92%"></i></div></div><div class="chart-labels"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span></div><button class="more" id="analyticsButton">View incident analytics ↗</button></article>
         </section>
       </main>
     </div>

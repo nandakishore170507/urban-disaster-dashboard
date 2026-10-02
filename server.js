@@ -53,6 +53,27 @@ const supabase = hasSupabaseConfig
     })
   : null;
 const localState = { ...seedState };
+localState.incidents = localState.incidents.map((incident) => ({
+  ...incident,
+  trackingId: `AEGIS-${incident.id.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`,
+  description: incident.description || "Field report received.",
+  createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  updatedAt: new Date().toISOString()
+}));
+localState.history = localState.incidents.map((incident) => ({
+  id: crypto.randomUUID(),
+  incidentId: incident.id,
+  status: incident.status,
+  note: "Initial incident report",
+  createdAt: incident.createdAt
+}));
+const defaultShelters = [
+  { id: "shelter-001", name: "Kochi Community Hall", location: "Kaloor, Kochi", latitude: 10.0014, longitude: 76.2999, capacity: 450, available: 180, status: "Open" },
+  { id: "shelter-002", name: "Edappally Relief Centre", location: "Edappally, Kochi", latitude: 10.0261, longitude: 76.3086, capacity: 300, available: 62, status: "Open" },
+  { id: "shelter-003", name: "Vyttila School Shelter", location: "Vyttila, Kochi", latitude: 9.9678, longitude: 76.3189, capacity: 220, available: 0, status: "Full" }
+];
+localState.shelters = defaultShelters;
+localState.auditLogs = [];
 
 const sendJson = (res, status, payload) => {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
@@ -200,6 +221,9 @@ const formatIncident = (incident, photoUrl = null) => {
   description: incident.description,
   photoName: incident.photo_name || null,
   photoUrl,
+  trackingId: incident.tracking_id || incident.trackingId || `AEGIS-${String(incident.id).replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`,
+  createdAt: incident.created_at || incident.createdAt || null,
+  updatedAt: incident.updated_at || incident.updatedAt || null,
   age: incident.created_at ? relativeAge(incident.created_at) : incident.age,
   severity: incident.severity,
   status: incident.status
@@ -217,6 +241,64 @@ const getPhotoUrl = async (photoPath) => {
 };
 
 const formatIncidentWithPhoto = async (incident) => formatIncident(incident, await getPhotoUrl(incident.photo_name));
+
+const recordAudit = async (action, entityType, entityId, details) => {
+  if (supabase) {
+    const { error } = await supabase.from("audit_logs").insert({ action, entity_type: entityType, entity_id: entityId, details });
+    if (error && error.code !== "PGRST205") throw error;
+    return;
+  }
+  localState.auditLogs.unshift({ id: crypto.randomUUID(), action, entityType, entityId, details, createdAt: new Date().toISOString() });
+};
+
+const recordHistory = async (incidentId, status, note) => {
+  if (supabase) {
+    const { error } = await supabase.from("incident_history").insert({ incident_id: incidentId, status, note });
+    if (error && error.code !== "PGRST205") throw error;
+    return;
+  }
+  localState.history.unshift({ id: crypto.randomUUID(), incidentId, status, note, createdAt: new Date().toISOString() });
+};
+
+const getIncidentDetails = async (incidentId) => {
+  if (supabase) {
+    const incidentResult = await supabase.from("incidents").select("*").eq("id", incidentId).single();
+    if (incidentResult.error) throw incidentResult.error;
+    const [historyResult, assignmentResult] = await Promise.all([
+      supabase.from("incident_history").select("*").eq("incident_id", incidentId).order("created_at", { ascending: true }),
+      supabase.from("incident_assignments").select("assigned_at, response_teams(name, status, eta)").eq("incident_id", incidentId).order("assigned_at", { ascending: false }).limit(1)
+    ]);
+    if (historyResult.error && historyResult.error.code !== "PGRST205") throw historyResult.error;
+    if (assignmentResult.error && assignmentResult.error.code !== "PGRST205") throw assignmentResult.error;
+    return {
+      incident: await formatIncidentWithPhoto(incidentResult.data),
+      history: (historyResult.data || []).map((item) => ({ status: item.status, note: item.note, createdAt: item.created_at })),
+      assignment: assignmentResult.data?.[0]?.response_teams || null
+    };
+  }
+  const incident = localState.incidents.find((item) => item.id === incidentId);
+  if (!incident) return null;
+  const assignment = localState.teams.find((team) => team.assignment?.startsWith(`${incident.title} ·`)) || null;
+  return { incident: formatIncident(incident), history: localState.history.filter((item) => item.incidentId === incidentId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), assignment };
+};
+
+const getShelters = async () => {
+  if (!supabase) return localState.shelters;
+  const { data, error } = await supabase.from("shelters").select("*").order("available", { ascending: false });
+  if (error) {
+    if (error.code === "PGRST205") return defaultShelters;
+    throw error;
+  }
+  return data.length ? data : defaultShelters;
+};
+
+const getAnalytics = async () => {
+  const data = await dashboard();
+  const incidents = data.incidents || [];
+  const bySeverity = incidents.reduce((result, incident) => ({ ...result, [incident.severity]: (result[incident.severity] || 0) + 1 }), {});
+  const byStatus = incidents.reduce((result, incident) => ({ ...result, [incident.status]: (result[incident.status] || 0) + 1 }), {});
+  return { total: incidents.length, bySeverity, byStatus, averageResponseMinutes: 18, generatedAt: new Date().toISOString() };
+};
 
 const ensurePhotoBucket = async () => {
   if (!supabase) return;
@@ -251,7 +333,8 @@ const dashboardFromSupabase = async () => {
     metrics: { activeIncidents: incidentsResult.data.filter((item) => item.status !== "Resolved").length, peopleAtRisk: 8460, shelterCapacity: 72, readiness: 94 },
     alert: alertResult.data[0] ? { title: alertResult.data[0].title, message: alertResult.data[0].message } : null,
     incidents: await Promise.all(incidentsResult.data.map(formatIncidentWithPhoto)),
-    teams: teamsResult.data
+    teams: teamsResult.data,
+    shelters: await getShelters()
   };
 };
 
@@ -261,7 +344,8 @@ const dashboard = async () => {
     metrics: { activeIncidents: localState.incidents.filter((item) => item.status !== "Resolved").length, peopleAtRisk: 8460, shelterCapacity: 72, readiness: 94 },
     alert: localState.alertActive ? { title: "Monsoon surge advisory", message: "Heavy rainfall expected in Zones 2 and 4 between 14:00–18:00." } : null,
     incidents: localState.incidents,
-    teams: localState.teams
+    teams: localState.teams,
+    shelters: localState.shelters
   };
 };
 
@@ -289,24 +373,30 @@ const createIncident = async (body) => {
         longitude: body.longitude ?? null,
         description: body.description,
         photo_name: photoPath,
-        severity: body.severity
+        severity: body.severity,
+        tracking_id: `AEGIS-${crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()}`
       };
       let { data, error } = await supabase.from("incidents").insert(incidentValues).select().single();
       if (error?.code === "PGRST204") {
         const legacyValues = { ...incidentValues };
         delete legacyValues.latitude;
         delete legacyValues.longitude;
+        delete legacyValues.tracking_id;
         ({ data, error } = await supabase.from("incidents").insert(legacyValues).select().single());
       }
       if (error) throw error;
+      await recordHistory(data.id, data.status, "Incident report received");
+      await recordAudit("created", "incident", data.id, `Incident ${data.title} reported at ${data.location}`);
       return formatIncidentWithPhoto(data);
     } catch (error) {
       if (photoPath) await supabase.storage.from(photoBucket).remove([photoPath]);
       throw error;
     }
   }
-  const incident = { id: `inc-${Date.now()}`, title: body.title, location: body.location, latitude: body.latitude ?? null, longitude: body.longitude ?? null, description: body.description, photoName: body.photoName || null, age: "just now", severity: body.severity, status: "Reported" };
+  const incident = { id: `inc-${Date.now()}`, title: body.title, location: body.location, latitude: body.latitude ?? null, longitude: body.longitude ?? null, description: body.description, photoName: body.photoName || null, age: "just now", severity: body.severity, status: "Reported", trackingId: `AEGIS-${Date.now().toString(36).toUpperCase()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   localState.incidents.unshift(incident);
+  localState.history.unshift({ id: crypto.randomUUID(), incidentId: incident.id, status: "Reported", note: "Incident report received", createdAt: incident.createdAt });
+  await recordAudit("created", "incident", incident.id, `Incident ${incident.title} reported at ${incident.location}`);
   return incident;
 };
 
@@ -314,11 +404,16 @@ const updateIncidentStatus = async (incidentId, status) => {
   if (supabase) {
     const { data, error } = await supabase.from("incidents").update({ status, updated_at: new Date().toISOString() }).eq("id", incidentId).select().single();
     if (error) throw error;
+    await recordHistory(incidentId, status, `Status changed to ${status}`);
+    await recordAudit("status_changed", "incident", incidentId, `Incident status changed to ${status}`);
     return formatIncident(data);
   }
   const incident = localState.incidents.find((item) => item.id === incidentId);
   if (!incident) return null;
   incident.status = status;
+  incident.updatedAt = new Date().toISOString();
+  localState.history.push({ id: crypto.randomUUID(), incidentId, status, note: `Status changed to ${status}`, createdAt: incident.updatedAt });
+  await recordAudit("status_changed", "incident", incidentId, `Incident status changed to ${status}`);
   return incident;
 };
 
@@ -334,7 +429,11 @@ const dispatchIncident = async (incidentId) => {
     p_incident_id: incidentId,
     p_team_id: team.id
     });
-    if (!error) return { incident: formatIncident(data.incident), team: data.team };
+    if (!error) {
+      await recordHistory(incidentId, "Assigned", `Assigned to ${data.team.name}`);
+      await recordAudit("dispatched", "incident", incidentId, `Dispatched ${data.team.name}`);
+      return { incident: formatIncident(data.incident), team: data.team };
+    }
     if (error.code !== "PGRST202" && error.code !== "42883") throw error;
 
     const incidentUpdate = await supabase.from("incidents")
@@ -352,6 +451,8 @@ const dispatchIncident = async (incidentId) => {
     const assignment = await supabase.from("incident_assignments")
     .upsert({ incident_id: incidentId, team_id: team.id }, { onConflict: "incident_id,team_id" });
     if (assignment.error) throw assignment.error;
+    await recordHistory(incidentId, "Assigned", `Assigned to ${team.name}`);
+    await recordAudit("dispatched", "incident", incidentId, `Dispatched ${team.name}`);
     return { incident: formatIncident(incidentUpdate.data), team: teamUpdate.data };
   }
   const incident = localState.incidents.find((item) => item.id === incidentId) || localState.incidents[0];
@@ -360,6 +461,9 @@ const dispatchIncident = async (incidentId) => {
   team.status = "En route";
   team.assignment = `${incident.title} · ${incident.location}`;
   team.eta = "08 min";
+  incident.updatedAt = new Date().toISOString();
+  localState.history.push({ id: crypto.randomUUID(), incidentId, status: "Assigned", note: `Assigned to ${team.name}`, createdAt: incident.updatedAt });
+  await recordAudit("dispatched", "incident", incidentId, `Dispatched ${team.name}`);
   return { incident, team };
 };
 
@@ -391,7 +495,23 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/user-counts" && req.method === "GET") return sendJson(res, 200, await getUserCounts());
     if (url.pathname === "/api/dashboard" && req.method === "GET") return sendJson(res, 200, await dashboard());
-    if (url.pathname === "/api/incidents" && req.method === "GET") return sendJson(res, 200, { incidents: (await dashboard()).incidents });
+    if (url.pathname === "/api/incidents" && req.method === "GET") {
+      const data = await dashboard();
+      const query = url.searchParams;
+      const incidents = data.incidents.filter((incident) =>
+        (!query.get("severity") || incident.severity === query.get("severity")) &&
+        (!query.get("status") || incident.status === query.get("status")) &&
+        (!query.get("location") || incident.location.toLowerCase().includes(query.get("location").toLowerCase())) &&
+        (!query.get("from") || String(incident.createdAt || "").slice(0, 10) >= query.get("from")) &&
+        (!query.get("to") || String(incident.createdAt || "").slice(0, 10) <= query.get("to"))
+      );
+      return sendJson(res, 200, { incidents });
+    }
+    if (url.pathname.startsWith("/api/incidents/") && req.method === "GET") {
+      const details = await getIncidentDetails(url.pathname.split("/")[3]);
+      if (!details) return sendJson(res, 404, { error: "Incident not found" });
+      return sendJson(res, 200, details);
+    }
     if (url.pathname === "/api/incidents" && req.method === "POST") {
       const body = await readBody(req);
       if (typeof body.title !== "string" || typeof body.location !== "string" || typeof body.description !== "string" ||
@@ -412,9 +532,19 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 422, { error: "Invalid photo data" });
       }
       const incident = await createIncident({ ...body, title: body.title.trim(), location: body.location.trim(), description: body.description.trim() });
-      return sendJson(res, 201, { incident, message: "Incident reported successfully" });
+      return sendJson(res, 201, { incident, trackingId: incident.trackingId, message: `Incident reported successfully · Tracking ID ${incident.trackingId}` });
     }
     if (url.pathname === "/api/teams" && req.method === "GET") return sendJson(res, 200, { teams: (await dashboard()).teams });
+    if (url.pathname === "/api/shelters" && req.method === "GET") return sendJson(res, 200, { shelters: await getShelters() });
+    if (url.pathname === "/api/analytics" && req.method === "GET") return sendJson(res, 200, await getAnalytics());
+    if (url.pathname === "/api/audit" && req.method === "GET") {
+      if (supabase) {
+        const result = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100);
+        if (result.error && result.error.code !== "PGRST205") throw result.error;
+        return sendJson(res, 200, { logs: result.data || [] });
+      }
+      return sendJson(res, 200, { logs: localState.auditLogs.slice(0, 100) });
+    }
     if (url.pathname === "/api/incidents/dispatch" && req.method === "POST") {
       const body = await readBody(req);
       if (typeof body.incidentId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.incidentId)) {

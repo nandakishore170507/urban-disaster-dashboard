@@ -25,10 +25,45 @@ create table if not exists public.incidents (
   longitude double precision,
   description text not null,
   photo_name text,
+  tracking_id text unique,
   severity text not null default 'Medium' check (severity in ('Low', 'Medium', 'High', 'Critical')),
   status text not null default 'Reported' check (status in ('Reported', 'Assigned', 'Responding', 'Resolved')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+alter table public.incidents add column if not exists tracking_id text;
+update public.incidents
+set tracking_id = 'AEGIS-' || upper(substr(replace(id::text, '-', ''), 1, 8))
+where tracking_id is null;
+
+create table if not exists public.incident_history (
+  id uuid primary key default gen_random_uuid(),
+  incident_id uuid not null references public.incidents(id) on delete cascade,
+  status text not null,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.shelters (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  location text not null,
+  latitude double precision,
+  longitude double precision,
+  capacity integer not null default 0,
+  available integer not null default 0,
+  status text not null default 'Open' check (status in ('Open', 'Limited', 'Full')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  action text not null,
+  entity_type text not null,
+  entity_id text,
+  details text,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.response_teams (
@@ -63,6 +98,9 @@ alter table public.incidents enable row level security;
 alter table public.response_teams enable row level security;
 alter table public.incident_assignments enable row level security;
 alter table public.public_alerts enable row level security;
+alter table public.incident_history enable row level security;
+alter table public.shelters enable row level security;
+alter table public.audit_logs enable row level security;
 
 insert into public.response_teams (name, assignment, status, eta)
 values
@@ -80,6 +118,19 @@ from (values
   ('Medical evacuation', 'Edappally', 'Residents require medical evacuation.', 'Medium', 'Responding')
 ) as seed(title, location, description, severity, status)
 where not exists (select 1 from public.incidents);
+
+insert into public.shelters (name, location, latitude, longitude, capacity, available, status)
+select * from (values
+  ('Kochi Community Hall', 'Kaloor, Kochi', 10.0014, 76.2999, 450, 180, 'Open'),
+  ('Edappally Relief Centre', 'Edappally, Kochi', 10.0261, 76.3086, 300, 62, 'Open'),
+  ('Vyttila School Shelter', 'Vyttila, Kochi', 9.9678, 76.3189, 220, 0, 'Full')
+) as seed(name, location, latitude, longitude, capacity, available, status)
+where not exists (select 1 from public.shelters);
+
+insert into public.incident_history (incident_id, status, note)
+select id, status, 'Initial incident report'
+from public.incidents i
+where not exists (select 1 from public.incident_history h where h.incident_id = i.id);
 
 alter table public.incidents add column if not exists latitude double precision;
 alter table public.incidents add column if not exists longitude double precision;
@@ -121,7 +172,7 @@ begin
     'incident', to_jsonb(incident_row),
     'team', to_jsonb(team_row)
   );
-end;
+end; 
 $$;
 
 revoke execute on function public.dispatch_incident(uuid, uuid) from public;
