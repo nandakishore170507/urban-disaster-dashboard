@@ -1,36 +1,88 @@
-# Aegis Urban Disaster Dashboard
+# 🚨 Aegis — Urban Disaster & Emergency Command Dashboard
 
-## Supabase setup
+<div align="center">
 
-1. Open the Supabase SQL Editor for your project.
-2. Run [`supabase/schema.sql`](supabase/schema.sql) once. It creates the prototype tables and seed data.
-3. Keep the server credentials in `.env`:
+> **A real-time, mission-critical operations grid for urban hazard monitoring, automated incident reporting, GIS spatial tracking, and emergency resource dispatch.**
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Live%20Operations-red.svg)]()
+[![Stack](https://img.shields.io/badge/Stack-Node.js%20%7C%20Supabase%20%7C%20Leaflet%20GIS-38bdf8.svg)]()
+
+---
+
+### 🎬 Launch Video & Interactive Trailer
+
+You can preview the high-impact launch trailer right inside your browser:
+👉 **[Open Launch Trailer Video Simulator (`launch_video.html`)](launch_video.html)**
+
+</div>
+
+---
+
+## ⚡ Core Capabilities
+
+- 🛰️ **Situation Room Command**: Real-time operational overview with live incident feeds, risk metrics, and monsoon surge advisories.
+- 🗺️ **GIS Risk Intelligence Map**: Interactive spatial visualization powered by Leaflet with multi-layer overlays (Risk, Rainfall, and Field Resources).
+- 🚨 **Rapid Incident Reporting**: Global geocoding location autocomplete, severity classification, and instant photo upload via Supabase Storage.
+- 🚑 **Field Team Dispatch**: Live team tracking (`Alpha 01`, `Medical 03`, `Utility 02`) with automated status and ETA calculations.
+- 📊 **Public Alert Reach & Shelters**: Historical alert broadcast analytics and live bed capacity tracking across municipal flood zones.
+
+---
+
+## 🏗️ Architecture & Stack
+
+- **Frontend**: Vanilla JavaScript (ES Modules), Custom Responsive CSS with Glassmorphism, Leaflet GIS.
+- **Backend API**: Node.js & Express server with secure in-memory fallback and Supabase Service Role integration.
+- **Database & Storage**: Supabase PostgreSQL with custom transactional functions (`dispatch_incident`) and signed private storage buckets (`incident-photos`).
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js (v18+)
+- (Optional) Supabase Project for persistent cloud storage
+
+### 1. Installation
+```powershell
+# Clone the repository
+git clone https://github.com/nandakishore170507/urban-disaster-dashboard.git
+
+# Navigate into project directory
+cd urban-disaster-dashboard
+
+# Install dependencies
+npm install
+```
+
+### 2. Configure Environment (Optional for Supabase)
+Copy the example environment file:
+```powershell
+cp .env.example .env
+```
+Fill in your credentials:
 ```env
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_ANON_KEY=your-anon-or-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-or-secret-key
 ```
+*(If no keys are provided, Aegis seamlessly operates with rich built-in in-memory demonstration telemetry).*
 
-The service-role/secret key is used only by `server.js`; never expose it in browser code or commit `.env`.
-
-Create a Storage bucket named `incident-photos` before submitting reports. The bucket can remain private because the API creates a signed photo URL for each incident. You can override the bucket name with `SUPABASE_STORAGE_BUCKET`.
-
-The deployed dashboard is currently public and opens directly without a login screen. Supabase profile and email-authentication code remains available for a future protected version, but it is not required to view or use this public prototype.
-
-Location autocomplete in the report form now uses global geocoding suggestions (countries, states, and cities) through `/api/places`, with starts-with matches ranked before contains matches and country symbols shown in the suggestion list.
-
-If you already ran the schema, run it again after updates so the `dispatch_incident` transaction function is created. The function should only be callable by the backend service role.
-
-For the interactive map, run the updated schema once more so `incidents.latitude` and `incidents.longitude` are added. Reports may include coordinates; existing Kochi seed locations use built-in fallback coordinates.
-
-## Run locally
-
+### 3. Run Locally
 ```powershell
-npm install
 npm start
 ```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-The API uses Supabase when the service-role variables are configured. If the Supabase variables are placeholders, it uses in-memory demo data for previewing; otherwise, run the schema before using the API.
+---
 
-For safety, the server binds to `127.0.0.1` by default, so the service-role-backed mutation endpoints are not exposed to your network during the local demo. Set `HOST` only when deploying behind an authenticated reverse proxy or after adding Supabase Auth.
+## 🗄️ Supabase Setup
+
+1. Open the **SQL Editor** in your Supabase dashboard.
+2. Execute [`supabase/schema.sql`](supabase/schema.sql) to generate the tables, transactional dispatch function, and initial seed data.
+3. Create a private bucket named `incident-photos` under **Storage**.
+
+---
+
+## 📜 License
+Distributed under the MIT License.
