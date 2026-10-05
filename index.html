@@ -8,9 +8,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css?v=dbf4896" />
   </head>
   <body>
+    <a class="skip-link" href="#mainContent">Skip to dashboard</a>
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">
@@ -19,11 +22,11 @@
         </div>
         <div class="nav-label">Command center</div>
         <nav>
-          <button class="nav-item active"><span>◈</span> Situation room</button>
-          <button class="nav-item"><span>⌁</span> Live incidents <b>12</b></button>
-          <button class="nav-item"><span>⌂</span> Shelters & capacity</button>
-          <button class="nav-item"><span>◌</span> Resources</button>
-          <button class="nav-item"><span>▣</span> Public alerts</button>
+          <button class="nav-item active" data-view="Situation room"><span>◈</span> Situation room</button>
+          <button class="nav-item" data-view="Live incidents"><span>⌁</span> Live incidents <b>12</b></button>
+          <button class="nav-item" data-view="Shelters & capacity"><span>⌂</span> Shelters & capacity</button>
+          <button class="nav-item" data-view="Resources"><span>◌</span> Resources</button>
+          <button class="nav-item" data-view="Public alerts"><span>▣</span> Public alerts</button>
         </nav>
         <div class="sidebar-spacer"></div>
         <div class="system-card">
@@ -38,16 +41,16 @@
         </div>
       </aside>
 
-      <main class="content">
+      <main class="content" id="mainContent">
         <header class="topbar">
           <div>
-            <div class="eyebrow"><span class="live-dot"></span> LIVE OPERATIONS · MON 14 OCT 2026</div>
+            <div class="eyebrow"><span class="live-dot"></span> LIVE OPERATIONS · <span id="currentDate">Loading…</span></div>
             <h1>Situation room</h1>
-            <p class="subtitle">Kochi metropolitan region <span>·</span> Monsoon response grid</p>
+            <p class="subtitle">Global operations <span>·</span> Disaster response network <span class="sync-status" id="lastUpdated">Updating…</span></p>
           </div>
           <div class="top-actions">
-            <button class="icon-button" aria-label="Notifications">♢<span class="notification"></span></button>
-            <button class="export-button" id="exportButton">Export briefing <span>↗</span></button>
+            <button class="icon-button" id="notificationButton" aria-label="Open emergency notifications">♢<span class="notification"></span></button>
+            <div class="top-actions"><select class="language-select" id="languageSelect" aria-label="Language"><option value="en">EN</option><option value="ml">മലയാളം</option><option value="hi">हिन्दी</option></select><button class="guide-button" id="guideButton">How Aegis works</button><button class="motion-toggle" id="motionToggle" type="button" aria-pressed="false">Motion: On</button><button class="report-button" id="reportButton">+ Report incident</button><button class="export-button" id="exportButton">Export briefing <span>↗</span></button></div>
           </div>
         </header>
 
@@ -68,39 +71,52 @@
           <article class="panel map-panel">
             <div class="panel-header"><div><h2>Risk intelligence map</h2><p>Rainfall, water level and field reports</p></div><div class="map-controls"><button class="selected">Risk</button><button>Rainfall</button><button>Resources</button></div></div>
             <div class="map">
-              <div class="map-grid"></div>
-              <div class="river"></div>
-              <div class="zone zone-one"><span>ZONE 01</span><b>LOW</b></div>
-              <div class="zone zone-two"><span>ZONE 02</span><b>HIGH</b></div>
-              <div class="zone zone-three"><span>ZONE 03</span><b>MEDIUM</b></div>
-              <div class="zone zone-four"><span>ZONE 04</span><b>HIGH</b></div>
-              <div class="map-label label-a">KADAVANTHRA</div><div class="map-label label-b">KALOOR</div><div class="map-label label-c">MARINE DRIVE</div>
-              <button class="map-pin pin-red" data-incident="Canal overflow · Palarivattom">!</button>
-              <button class="map-pin pin-orange" data-incident="Road blocked · Kaloor">!</button>
-              <button class="map-pin pin-blue" data-incident="Shelter · St. Mary's School">⌂</button>
+              <div id="worldMap" aria-label="Interactive world map showing disaster incidents"></div>
               <div class="map-legend"><span><i class="legend-dot red"></i> Critical</span><span><i class="legend-dot orange"></i> Watch</span><span><i class="legend-dot blue"></i> Shelter</span></div>
-              <div class="map-tooltip" id="mapTooltip"></div>
             </div>
           </article>
 
-          <article class="panel incident-panel">
+          <article class="panel incident-panel" id="incidentPanel">
             <div class="panel-header"><div><h2>Priority incidents</h2><p>Sorted by response urgency</p></div><button class="more">View all ↗</button></div>
+            <div class="incident-filters"><select id="severityFilter"><option value="">All severity</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select><select id="statusFilter"><option value="">All status</option><option>Reported</option><option>Assigned</option><option>Responding</option><option>Resolved</option></select><input id="locationFilter" placeholder="Filter location"><input id="dateFilter" type="date" aria-label="Filter by date"></div>
             <div class="incident-list">
               <button class="incident active-incident"><span class="incident-marker red">!</span><span class="incident-copy"><strong>Canal overflow</strong><small>Palarivattom · 14 min ago</small></span><span class="severity critical-text">Critical</span></button>
               <button class="incident"><span class="incident-marker orange">!</span><span class="incident-copy"><strong>Road submerged</strong><small>Kaloor junction · 28 min ago</small></span><span class="severity high-text">High</span></button>
               <button class="incident"><span class="incident-marker orange">!</span><span class="incident-copy"><strong>Power outage</strong><small>Vyttila ward · 42 min ago</small></span><span class="severity high-text">High</span></button>
               <button class="incident"><span class="incident-marker yellow">!</span><span class="incident-copy"><strong>Medical evacuation</strong><small>Edappally · 1 hr ago</small></span><span class="severity medium-text">Medium</span></button>
             </div>
-            <div class="incident-footer"><span>12 active incidents</span><button id="dispatchButton">Dispatch team <span>→</span></button></div>
+            <div class="incident-footer"><span id="activeIncidentCount">Loading active incidents…</span><button id="dispatchButton">Dispatch team <span>→</span></button></div>
           </article>
         </section>
 
         <section class="bottom-grid">
           <article class="panel table-panel"><div class="panel-header"><div><h2>Field response teams</h2><p>Live deployment status</p></div><button class="more">Manage teams ↗</button></div><table><thead><tr><th>TEAM</th><th>ASSIGNMENT</th><th>STATUS</th><th>ETA</th></tr></thead><tbody><tr><td><span class="team-icon">↟</span> Alpha 01</td><td>Palarivattom overflow</td><td><span class="status active-status">● En route</span></td><td>06 min</td></tr><tr><td><span class="team-icon teal">◆</span> Medical 03</td><td>Edappally evacuation</td><td><span class="status active-status">● On site</span></td><td>—</td></tr><tr><td><span class="team-icon purple">✚</span> Utility 02</td><td>Vyttila power outage</td><td><span class="status waiting-status">● Standby</span></td><td>18 min</td></tr></tbody></table></article>
-          <article class="panel alert-panel"><div class="panel-header"><div><h2>Public alert reach</h2><p>Last 24 hours</p></div><span class="reach-total">84.2K <small>people</small></span></div><div class="reach-chart"><div class="chart-y"><span>40k</span><span>20k</span><span>0</span></div><div class="bars"><i style="height:42%"></i><i style="height:58%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:52%"></i><i style="height:88%"></i><i style="height:64%"></i><i style="height:94%"></i><i style="height:76%"></i><i style="height:100%"></i><i style="height:84%"></i><i style="height:92%"></i></div></div><div class="chart-labels"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span></div></article>
+          <article class="panel alert-panel" id="shelterPanel"><div class="panel-header"><div><h2>Public alert reach</h2><p>Last 24 hours</p></div><span class="reach-total">84.2K <small>people</small></span></div><div class="reach-chart"><div class="chart-y"><span>40k</span><span>20k</span><span>0</span></div><div class="bars"><i style="height:42%"></i><i style="height:58%"></i><i style="height:38%"></i><i style="height:70%"></i><i style="height:52%"></i><i style="height:88%"></i><i style="height:64%"></i><i style="height:94%"></i><i style="height:76%"></i><i style="height:100%"></i><i style="height:84%"></i><i style="height:92%"></i></div></div><div class="chart-labels"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span></div><button class="more" id="analyticsButton">View incident analytics ↗</button></article>
+        </section>
+        <section class="workspace-panel" id="incidentsWorkspace" data-workspace-view="Live incidents" hidden>
+          <div class="workspace-heading"><div><span class="eyebrow">COMMAND CENTER / INCIDENTS</span><h2>Live incident queue</h2><p>Prioritize, inspect, and resolve field reports from one operational view.</p></div><button class="report-button" id="workspaceReportButton">+ Report incident</button></div>
+          <div class="workspace-grid" id="workspaceIncidentList"></div>
+        </section>
+        <section class="workspace-panel" id="sheltersWorkspace" data-workspace-view="Shelters & capacity" hidden>
+          <div class="workspace-heading"><div><span class="eyebrow">COMMAND CENTER / SHELTERS</span><h2>Evacuation capacity</h2><p>Find available beds and open directions for residents.</p></div></div>
+          <div class="workspace-grid" id="workspaceShelterList"></div>
+        </section>
+        <section class="workspace-panel" id="resourcesWorkspace" data-workspace-view="Resources" hidden>
+          <div class="workspace-heading"><div><span class="eyebrow">COMMAND CENTER / RESOURCES</span><h2>Response network</h2><p>Track field teams, assignments, and recent operational actions.</p></div></div>
+          <div class="workspace-grid" id="workspaceResourceList"></div>
+        </section>
+        <section class="workspace-panel" id="alertsWorkspace" data-workspace-view="Public alerts" hidden>
+          <div class="workspace-heading"><div><span class="eyebrow">COMMAND CENTER / PUBLIC ALERTS</span><h2>Resident communications</h2><p>Review active advisories and recommended public actions.</p></div></div>
+          <div class="workspace-grid" id="workspaceAlertList"></div>
         </section>
       </main>
     </div>
+    <nav class="mobile-nav" aria-label="Mobile command navigation">
+      <button class="nav-item active" data-view="Situation room"><span aria-hidden="true">◈</span><strong>Overview</strong></button>
+      <button class="nav-item" data-view="Live incidents"><span aria-hidden="true">⌁</span><strong>Incidents</strong></button>
+      <button class="nav-item" data-view="Shelters & capacity"><span aria-hidden="true">⌂</span><strong>Shelters</strong></button>
+      <button class="nav-item" data-view="Resources"><span aria-hidden="true">◌</span><strong>Teams</strong></button>
+    </nav>
       <div class="modal-backdrop" id="modalBackdrop">
         <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
           <button class="modal-close" id="modalClose" aria-label="Close">×</button>
@@ -110,7 +126,8 @@
           <div id="modalBody"></div>
         </section>
       </div>
-      <div class="toast" id="toast"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aegis — Urban Disaster Intelligence Launch Trailer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #060913;
+      color: #f1f5f9;
+      font-family: 'Outfit', -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .video-frame {
+      width: 960px;
+      height: 540px;
+      background: radial-gradient(circle at 50% 50%, #0d1527 0%, #040711 100%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 40px rgba(59, 130, 246, 0.15);
+    }
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+    .radar-sweep {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 800px;
+      height: 800px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 1px solid rgba(14, 165, 233, 0.15);
+      background: conic-gradient(from 0deg, rgba(14, 165, 233, 0.18) 0deg, transparent 60deg, transparent 360deg);
+      animation: rotateSweep 4s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes rotateSweep {
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .hud-header {
+      position: absolute;
+      top: 24px;
+      left: 28px;
+      right: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      color: #38bdf8;
+      z-index: 10;
+    }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #f87171;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-weight: 700;
+      animation: pulseAlert 1.5s infinite;
+    }
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.75; transform: scale(0.97); }
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #ef4444;
+      border-radius: 50%;
+    }
+    .scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: scale(0.96);
+      pointer-events: none;
+    }
+    .scene.active {
+      opacity: 1;
+      transform: scale(1);
+      pointer-events: auto;
+    }
+    .tagline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #38bdf8;
+      margin-bottom: 12px;
+    }
+    .hero-title {
+      font-size: 42px;
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-title.alert {
+      background: linear-gradient(135deg, #f87171 0%, #ef4444 50%, #fca5a5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .stat-cards {
+      display: flex;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .stat-card {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 12px;
+      padding: 16px 24px;
+      min-width: 180px;
+      text-align: left;
+    }
+    .stat-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+    }
+    .stat-val {
+      font-size: 22px;
+      font-weight: 800;
+      color: #38bdf8;
+      margin-top: 4px;
+    }
+    .progress-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #38bdf8, #ef4444);
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+    .controls {
+      margin-top: 24px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    button {
+      background: #0284c7;
+      color: white;
+      border: none;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #0369a1;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="video-frame" id="player">
+    <div class="grid-overlay"></div>
+    <div class="radar-sweep"></div>
+
+    <div class="hud-header">
+      <div>AEGIS // OPS-NET: ONLINE</div>
+      <div class="live-badge"><span class="live-dot"></span> LIVE SITUATIONAL GRID</div>
+      <div id="time-display">00:00</div>
+    </div>
+
+    <!-- Scene 1 -->
+    <div class="scene active" id="scene-0">
+      <div class="tagline">CRISIS INITIATION PROTOCOL</div>
+      <h1 class="hero-title alert">WHEN SECONDS DICTATE SURVIVAL.</h1>
+      <p style="color: #94a3b8; max-width: 540px;">Multi-sector urban inundation detected across dense municipal sectors.</p>
+    </div>
+
+    <!-- Scene 2 -->
+    <div class="scene" id="scene-1">
+      <div class="tagline">SPATIAL TELEMETRY INGESTION</div>
+      <h1 class="hero-title">REAL-TIME GIS HAZARD MAPPING</h1>
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-label">Inundation Delta</div>
+          <div class="stat-val" style="color: #ef4444;">+2.84 m/hr</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Telemetry Latency</div>
+          <div class="stat-val">12 ms</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sensor Health</div>
+          <div class="stat-val">99.9%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 3 -->
+    <div class="scene" id="scene-2">
+      <div class="tagline">AUTONOMOUS CIVILIAN PROTECTION</div>
+      <h1 class="hero-title">DYNAMIC EVACUATION CORRIDORS</h1>
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-label">Alert Reach</div>
+          <div class="stat-val">542,000+</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Safe Zone Locked</div>
+          <div class="stat-val" style="color: #10b981;">OPTIMIZED</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 4 -->
+    <div class="scene" id="scene-3">
+      <div class="tagline">EMERGENCY FLEET ORCHESTRATION</div>
+      <h1 class="hero-title">DYNAMIC OBSTACLE-AWARE DISPATCH</h1>
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="stat-label">EMS Response Time</div>
+          <div class="stat-val" style="color: #10b981;">-48% DELAY</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Fleet Nodes Sync</div>
+          <div class="stat-val">ACTIVE</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scene 5 -->
+    <div class="scene" id="scene-4">
+      <div class="tagline">AEGIS DISASTER INTELLIGENCE</div>
+      <h1 class="hero-title" style="font-size: 50px;">BUILT FOR RESILIENCE.</h1>
+      <p style="color: #38bdf8; font-weight: 700; font-family: 'JetBrains Mono'; margin-top: 10px;">github.com/nandakishore170507/urban-disaster-dashboard</p>
+    </div>
+
+    <div class="progress-bar" id="progress"></div>
+  </div>
+
+  <div class="controls">
+    <button onclick="restart()">▶ Replay Video</button>
+    <span style="color: #64748b; font-size: 13px;">Use <b>Win + Alt + R</b> or OBS to record this frame as your launch video.</span>
+  </div>
+
+  <script>
+    const totalDuration = 20000;
+    const sceneTimes = [0, 4000, 8000, 13000, 17000];
+    let startTime = performance.now();
+
+    function update() {
+      const now = performance.now();
+      const elapsed = (now - startTime) % totalDuration;
+      
+      const progressPercent = (elapsed / totalDuration) * 100;
+      document.getElementById('progress').style.width = progressPercent + '%';
+
+      const sec = Math.floor(elapsed / 1000);
+      const ms = Math.floor((elapsed % 1000) / 10);
+      document.getElementById('time-display').innerText = `00:${sec.toString().padStart(2, '0')}:${ms.toString().padStart(2, '0')}`;
+
+      let currentScene = 0;
+      for (let i = sceneTimes.length - 1; i >= 0; i--) {
+        if (elapsed >= sceneTimes[i]) {
+          currentScene = i;
+          break;
+        }
+      }
+
+      for (let i = 0; i < 5; i++) {
+        const sc = document.getElementById(`scene-${i}`);
+        if (i === currentScene) {
+          sc.classList.add('active');
+        } else {
+          sc.classList.remove('active');
+        }
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    function restart() {
+      startTime = performance.now();
+    }
+
+    requestAnimationFrame(update);
+  </script>
+</body>
+</html>
